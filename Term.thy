@@ -1,6 +1,6 @@
 chapter {* camr project *}
 
-theory Protocol imports Main Unification begin
+theory Term imports Main Unification begin
 
 (* definition of messages *)
 type_synonym var = string
