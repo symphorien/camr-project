@@ -43,13 +43,24 @@ fun msg_of_term :: "msg_term \<Rightarrow> msg" where
 
 (* embedding lemmas *)
 lemma wf_term_embed [simp]: "wf_term arity (embed msg)"
-  sorry
+proof(induction msg)
+qed(auto intro:wf_term.intros)
 
 lemma msg_of_term_embed [simp]: "msg_of_term (embed x) = x"
 proof(induction x)
 qed auto
 
 lemma embed_msg_of_term [simp]: "wf_term arity x \<Longrightarrow> embed (msg_of_term x) = x"
-  sorry
+proof(induction rule:wf_term.induct)
+case (1 uu)
+then show ?case by auto
+next
+case (2 l f)
+  then show ?case
+(* arity goes up to 2 so pattern match on up to 2 elements of l*)
+  proof(cases f;cases l;(cases "tl l")?)
+  qed(auto simp add:"2.IH")
+qed
+
 
 end

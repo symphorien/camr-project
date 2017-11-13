@@ -40,7 +40,11 @@ lemma var_scomp [simp]: "Var \<circ>s \<sigma> = \<sigma>"
 
 
 
-
+inductive wf_term:: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) term \<Rightarrow> bool"
+  for arity :: "'f \<Rightarrow> nat"
+  where
+  "wf_term arity (Var _)"
+| "(length l = arity f) \<Longrightarrow> \<forall> x \<in> set l. wf_term arity x \<Longrightarrow> wf_term arity (Fun f l)"
 
 
 
