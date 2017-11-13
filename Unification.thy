@@ -110,11 +110,11 @@ type_synonym ('f, 'v) equation = "('f, 'v) term \<times> ('f, 'v) term"
 
 type_synonym ('f, 'v) equations = "('f, 'v) equation list"
 
-fun fv_eq :: "('f, 'v) equation \<Rightarrow> 'v set \<times> 'v set" where
-  "fv_eq (a, b) = (fv a, fv b)"
+fun fv_eq :: "('f, 'v) equation \<Rightarrow> 'v set" where
+  "fv_eq (a, b) = fv a \<union> fv b"
 
-fun fv_eqs :: "('f, 'v) equations \<Rightarrow> ('v set \<times> 'v set) list" where
-  "fv_eqs l = map fv_eq l"
+fun fv_eqs :: "('f, 'v) equations \<Rightarrow> 'v set" where
+  "fv_eqs l = (\<Union>x \<in> set l. fv_eq x)"
 
 fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation" where
   "sapply_eq \<sigma> (a,b) = (sapply \<sigma> a, sapply \<sigma> b)"
@@ -125,19 +125,55 @@ fun sapply_eqs :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow>
 
 (******************************** lemmata *************************************)
 
-lemma fv_sapply_eq: "fv_eq (sapply_eq \<sigma> (a,b)) = ((\<Union>x \<in> fv a. fv (\<sigma> \<cdot> a)), (\<Union>y \<in> fv b. fv (\<sigma> \<cdot> b)))"
+lemma fv_sapply_eq: "fv_eq (sapply_eq \<sigma> (a,b)) = fv (\<sigma> \<cdot> a) \<union> fv (\<sigma> \<cdot> b)"
+  by auto
+
+lemma fv_sapply_eqs: "fv_eqs (sapply_eqs \<sigma> l) = (\<Union>x \<in> set l. fv_eq (sapply_eq \<sigma> x))"
+  by auto
+
+lemma sapply_scomp_distrib_eq: "sapply_eq (\<sigma> \<circ>s \<tau>) (a,b) = (\<sigma> \<cdot> (\<tau> \<cdot> a), \<sigma> \<cdot> (\<tau> \<cdot> b))"
+  apply (auto simp add: sapply_scomp_distr)
   sorry
 
-lemma fv_sapply_eqs: "set (fv_eqs (sapply_eqs \<sigma> l)) = (\<Union>x \<in> set l. fv_eq (sapply_eq \<sigma> x))"
-
-lemma sapply_scomp_distrib_eq
-
-lemma sapply_scomp_distrib_eqs
+lemma sapply_scomp_distrib_eqs: "sapply_eqs (\<sigma> \<circ>s \<tau>) l = map (\<lambda>x. sapply_eq (\<sigma> \<circ>s \<tau>) x) l"
+  sorry
 
 
-  
-  
+(******************************* definitions ************************************)
 
+fun unifies :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
+  "unifies \<sigma> (a, b) \<longleftrightarrow> \<sigma> \<cdot> a = \<sigma> \<cdot> b"
+
+inductive unifiess :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "\<lbrakk> x \<in> set l \<Longrightarrow> unifies \<sigma> x \<rbrakk> \<Longrightarrow> unifiess \<sigma> l"
+
+fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "is_mgu \<sigma> l = unifiess \<sigma> l \<and> (\<forall> \<tau>. unifiess \<tau> l \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>)"
+
+lemma unifies_sapply_eq: "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau>) eq"
+  sorry
+
+fun measure2 :: "('f, 'v) equations \<Rightarrow> nat" where
+  "measure2 (x # xs) = size x + measure2 xs"
+| "measure2 [] = 0"
+
+fun scomp_opt :: "('f, 'v) subst option \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst option" where
+  "scomp_opt (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>s \<tau>)"
+| "scomp_opt None _ = None"
+
+function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option" where
+  "unify [] = Some Var"
+| "unify ((Var x, Var y) # xs) = (if x = y then unify xs else None)"
+| "unify ((Var x, b) # xs) = (if x \<in> fv b then None else scomp_opt (unify (sapply_eqs (Var (x := b)) xs)) (Var (x := b)))"
+| "unify ((b, Var x) # xs) = unify ((Var x, b) # xs)"
+| "unify ((Fun f l1, Fun g l2) # xs) = (if g = f then (if length l2 = length l1 then unify (xs @ (zip l1 l2)) else None) else None)"
+by pat_completeness auto
+termination 
+  by (relation "measures [
+  (\<lambda>U. card (fv_eqs U)), 
+  (\<lambda>U. measure2 U), 
+  (\<lambda>U. length U)]")
+  (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm)
 
 
 end
