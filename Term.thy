@@ -1,6 +1,8 @@
 chapter {* camr project *}
 
 theory Term imports Main Unification begin
+(* assignment 5 *)
+(* (a) *)
 
 (* definition of messages *)
 type_synonym var = string
@@ -10,6 +12,7 @@ Hash msg | Concat msg msg | Sym_encrypt msg msg | Pub_encrypt msg msg | Sign msg
 | Const const | Variable var
 (* Pub_encrypt content key  and so on*)
 
+(* (b) *)
 (* embedding *)
 datatype symbol =
 SHash | SConcat | SSym_encrypt | SPub_encrypt | SSign | SConst const
@@ -21,6 +24,7 @@ fun arity :: "symbol \<Rightarrow> nat" where
 | "arity SSign = 2"
 | "arity (SConst _) = 0"
 
+(* (c) *)
 type_synonym msg_term = "(symbol, var) term"
 
 fun embed :: "msg \<Rightarrow> msg_term" where
