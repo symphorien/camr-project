@@ -148,7 +148,7 @@ inductive unifiess :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightar
   "\<lbrakk> x \<in> set l \<Longrightarrow> unifies \<sigma> x \<rbrakk> \<Longrightarrow> unifiess \<sigma> l"
 
 fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
-  "is_mgu \<sigma> l = unifiess \<sigma> l \<and> (\<forall> \<tau>. unifiess \<tau> l \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>)"
+  "is_mgu \<sigma> l = (unifiess \<sigma> l) \<and> (\<forall> \<tau>. unifiess \<tau> l \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>)"
 
 lemma unifies_sapply_eq: "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau>) eq"
   sorry
@@ -163,7 +163,7 @@ fun scomp_opt :: "('f, 'v) subst option \<Rightarrow> ('f, 'v) subst \<Rightarro
 
 function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option" where
   "unify [] = Some Var"
-| "unify ((Var x, Var y) # xs) = (if x = y then unify xs else None)"
+| "unify ((Var x, Var y) # xs) = (if x = y then unify xs else scomp_opt (unify (sapply_eqs (Var (x := Var y)) xs)) (Var (x := Var y)))"
 | "unify ((Var x, b) # xs) = (if x \<in> fv b then None else scomp_opt (unify (sapply_eqs (Var (x := b)) xs)) (Var (x := b)))"
 | "unify ((b, Var x) # xs) = unify ((Var x, b) # xs)"
 | "unify ((Fun f l1, Fun g l2) # xs) = (if g = f then (if length l2 = length l1 then unify (xs @ (zip l1 l2)) else None) else None)"
@@ -176,10 +176,61 @@ termination
   (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm)
 
 
-inductive wf_term:: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) term \<Rightarrow> bool"
+(******************************** lemmata *********************************)
+
+lemma unify_return: "unify l = Some \<sigma> \<Longrightarrow> unifiess \<sigma> l"
+  sorry
+
+lemma unify_mgu: "\<lbrakk>unify l = some \<sigma>; unifiess \<tau> l\<rbrakk> \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
+  sorry
+
+lemma unify_sound: "unify l = Some \<sigma> \<Longrightarrow> is_mgu \<sigma> l"
+  sorry
+
+lemma unify_complete: "\<exists> \<sigma>. unifiess \<sigma> l \<Longrightarrow> (unify l = Some \<tau> \<and> unifiess \<tau> l)"
+  sorry
+
+lemma fv_subst: "unify l = Some \<sigma> \<Longrightarrow> fv_eqs (sapply_eqs \<sigma> l) \<subseteq> fv_eqs l"
+  sorry
+
+lemma fv_sdom: "unify l = Some \<sigma> \<Longrightarrow> sdom \<sigma> \<subseteq> fv_eqs l"
+  sorry
+
+lemma fv_svran: "unify l = Some \<sigma> \<Longrightarrow> svran \<sigma> \<subseteq> fv_eqs l"
+  sorry
+
+lemma sig_func: "unify l = Some \<sigma> \<Longrightarrow> sdom \<sigma> \<inter> svran \<sigma> = {}"
+  sorry
+
+
+(*********************************** definitions ***************************)
+
+inductive wf_term :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) term \<Rightarrow> bool"
   for arity :: "'f \<Rightarrow> nat"
   where
   "wf_term arity (Var _)"
 | "(length l = arity f) \<Longrightarrow> \<forall> x \<in> set l. wf_term arity x \<Longrightarrow> wf_term arity (Fun f l)"
+
+fun wf_subst :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) subst \<Rightarrow> bool" where
+  "wf_subst arity \<sigma> \<longleftrightarrow> (\<forall>x. wf_term arity (\<sigma> x))"
+
+fun wf_eq :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
+  "wf_eq arity (a,b) \<longleftrightarrow> (wf_term arity a \<and> wf_term arity b)"
+
+fun wf_eqs :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "wf_eqs arity l \<longleftrightarrow> (\<forall>x \<in> set l. wf_eq arity x)" 
+
+
+(********************************** lemmata **********************************)
+
+lemma wf_term_sapply: "\<lbrakk> wf_term arity t; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_term arity (\<sigma> \<cdot> t)"
+  sorry
+
+lemma wf_subst_scomp: "\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> \<rbrakk> \<Longrightarrow> wf_subst arity (\<sigma> \<circ>s \<tau>)"
+  sorry
+
+lemma wf_subst_unify: "\<lbrakk> unify l = Some \<sigma>; wf_eqs arity l \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
+  sorry
+
 
 end
