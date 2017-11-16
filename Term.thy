@@ -56,14 +56,14 @@ qed auto
 
 lemma embed_msg_of_term [simp]: "wf_term arity x \<Longrightarrow> embed (msg_of_term x) = x"
 proof(induction rule:wf_term.induct)
-case (1 uu)
+case (wf_term_intro_var uu)
 then show ?case by auto
 next
-case (2 l f)
+case (wf_term_intro_fun l f)
   then show ?case
 (* arity goes up to 2 so pattern match on up to 2 elements of l*)
   proof(cases f;cases l;(cases "tl l")?)
-  qed(auto simp add:"2.IH")
+  qed(auto simp add:"wf_term_intro_fun.IH")
 qed
 
 (* (c) : transfer of various functions via embedding 
@@ -78,8 +78,12 @@ fun embed_subst :: "subst_msg \<Rightarrow> (var \<Rightarrow> msg_term)" where
 "embed_subst s = embed o s"
 fun subst_from_embed :: "(var \<Rightarrow> msg_term) \<Rightarrow> subst_msg"  where
 "subst_from_embed s = msg_of_term o s"
+
 lemma embed_subst_from_embed [simp]: "wf_subst arity x \<Longrightarrow> embed \<circ> (msg_of_term \<circ> x) = x"
-  by(auto)
+proof(induction rule:wf_subst.induct)
+  case (1 \<sigma>)
+  then show ?case by(auto simp add:fun_eq_iff)
+qed
 
 (* sapply *)
 definition sapply_msg :: "subst_msg \<Rightarrow> msg \<Rightarrow> msg" where
