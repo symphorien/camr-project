@@ -275,16 +275,18 @@ lemma sig_func: "unify l = Some \<sigma> \<Longrightarrow> sdom \<sigma> \<inter
 inductive wf_term :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) term \<Rightarrow> bool"
   for arity :: "'f \<Rightarrow> nat"
   where
-  "wf_term arity (Var _)"
-| "(length l = arity f) \<Longrightarrow> \<forall> x \<in> set l. wf_term arity x \<Longrightarrow> wf_term arity (Fun f l)"
+  wf_term_intro_var:"wf_term arity (Var _)"
+| wf_term_intro_fun:"(length l = arity f) \<Longrightarrow> \<forall> x \<in> set l. wf_term arity x \<Longrightarrow> wf_term arity (Fun f l)"
 
-inductive wf_subst :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) subst \<Rightarrow> bool" where
-  "\<lbrakk> \<forall>x. wf_term arity x \<longrightarrow> wf_term arity (\<sigma> \<cdot> x) \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
-
-print_theorems
+inductive wf_subst :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) subst \<Rightarrow> bool"
+  for arity :: "'f \<Rightarrow> nat" where
+  "\<lbrakk> \<forall>x. wf_term arity (\<sigma> x) \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
 
 inductive wf_eq :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
   "\<lbrakk> wf_term arity a; wf_term arity b \<rbrakk> \<Longrightarrow> wf_eq arity (a,b)"
+
+lemma wf_eqE: "wf_eq arity (a, b) \<Longrightarrow> (wf_term arity a \<Longrightarrow> wf_term arity b \<Longrightarrow> P) \<Longrightarrow> P"
+  using wf_eq.cases by auto
 
 inductive wf_eqs :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
   "\<lbrakk> \<forall>x \<in> set l. wf_eq arity x \<rbrakk> \<Longrightarrow> wf_eqs arity l" 
@@ -299,21 +301,45 @@ lemma eq_comm1: "x = y \<Longrightarrow> wf_term arity x \<longleftrightarrow> w
   by auto
 
 lemma wf_term_sapply: "\<lbrakk> wf_term arity t; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_term arity (\<sigma> \<cdot> t)"
-proof (induction "\<sigma> \<cdot> t")
+proof (induction t)
   case (Var x)
-  have "\<sigma> \<cdot> t = Var x" using \<open>Var x = \<sigma> \<cdot> t\<close> by simp 
-  then show ?case by (simp add: wf_term.intros)
+  then show ?case
+    by(auto simp add:wf_subst.simps intro: wf_term.intros)
 next
-  case (Fun x1a x2)
-  then show ?case using wf_subst.cases by auto
+  case (Fun s ts)
+  let ?t = "Fun s ts"
+  have x:"\<sigma> \<cdot> ?t = Fun s (map (sapply \<sigma>) ts)" (is "_ = Fun _ ?elts") by(simp)
+  have "wf_term arity (Fun s ?elts)"
+  proof(rule wf_term_intro_fun)
+    have "length (map (op \<cdot> \<sigma>) ts) = length ts" by simp
+    also have "... = arity s" 
+      using `wf_term arity ?t`
+      by(cases rule:wf_term.cases)
+    finally show "length (map (op \<cdot> \<sigma>) ts) = arity s ".
+  next
+    have "\<And>x. x\<in>set (map (op \<cdot> \<sigma>) ts) \<Longrightarrow> wf_term arity x "
+    proof -
+      fix x
+      assume "x\<in>set (map (op \<cdot> \<sigma>) ts)"
+      then obtain z where "z\<in>set ts" and "x = \<sigma> \<cdot> z" by auto
+      have "wf_term arity z"
+        using `wf_term arity ?t`
+        by(cases rule:wf_term.cases)(auto simp add:`z\<in>set ts`)
+      from `z\<in> set ts` and `wf_term arity z` and `wf_subst arity \<sigma>` have "wf_term arity (\<sigma> \<cdot> z)" by(rule Fun.IH)
+      then show "wf_term arity x" by(simp add:`x = \<sigma>\<cdot>z`)
+    qed
+    then show "\<forall>x\<in>set (map (op \<cdot> \<sigma>) ts). wf_term arity x" by blast
+  qed
+  then show "wf_term arity (\<sigma> \<cdot> ?t)" by(simp add:x)
 qed
 
+lemma wf_eq_sapply_eq: "\<lbrakk> wf_eq arity eq; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_eq arity (sapply_eq \<sigma> eq)"
+  by(cases eq; auto simp add:wf_term_sapply elim!:wf_eqE intro!:wf_eq.intros)
+
 lemma wf_subst_scomp: "\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> \<rbrakk> \<Longrightarrow> wf_subst arity (\<sigma> \<circ>s \<tau>)"
-  by (metis sapply_scomp_distr wf_subst.intros wf_term_sapply)
+  by (simp add: wf_subst.simps wf_term_sapply)
 
 lemma wf_subst_unify: "\<lbrakk> unify l = Some \<sigma>; wf_eqs arity l \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
   apply (induction l)
   sorry
-
-
 end
