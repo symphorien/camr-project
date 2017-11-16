@@ -113,7 +113,8 @@ proof -
 (* first we need to show that x is well formed *)
   then obtain x where xdef:"unify ?s = Some x" and sigmadef:"\<sigma> = msg_of_term \<circ> x"
     by(auto simp add:unify_msg_def unifiess_msg_def split:option.split_asm)
-  have "wf_eqs arity ?s" by(auto)
+  have "wf_eqs arity ?s" 
+    by(auto intro!:wf_eqs.intros wf_eq.intros)
   from xdef and this have "wf_subst arity x" by(rule wf_subst_unify)
 (* now we can use the embedding easily *)
   show ?thesis
