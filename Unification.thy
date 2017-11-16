@@ -144,11 +144,11 @@ lemma sapply_scomp_distrib_eqs: "sapply_eqs (\<sigma> \<circ>s \<tau>) l = map (
 fun unifies :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
   "unifies \<sigma> (a, b) \<longleftrightarrow> \<sigma> \<cdot> a = \<sigma> \<cdot> b"
 
-inductive unifiess :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
-  "\<lbrakk> x \<in> set l \<Longrightarrow> unifies \<sigma> x \<rbrakk> \<Longrightarrow> unifiess \<sigma> l"
+definition unifiess :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "unifiess \<sigma> l =  (\<forall> x \<in> set l. unifies \<sigma> x)"
 
-fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
-  "is_mgu \<sigma> l = (unifiess \<sigma> l) \<and> (\<forall> \<tau>. unifiess \<tau> l \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>)"
+definition is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
+  "is_mgu \<sigma> l = ((unifiess \<sigma> l) \<and> (\<forall> \<tau>. (unifiess \<tau> l \<longrightarrow> (\<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>))))"
 
 lemma unifies_sapply_eq: "unifies \<sigma> (sapply_eq \<tau> eq) \<longleftrightarrow> unifies (\<sigma> \<circ>s \<tau>) eq"
   sorry

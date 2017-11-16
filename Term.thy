@@ -66,5 +66,61 @@ case (2 l f)
   qed(auto simp add:"2.IH")
 qed
 
+(* (c) : transfer of various functions via embedding 
+   naming convention: ${fn} \<rightarrow> ${fn}_msg_*)
+(* fv *)
+definition fv_msg:: "msg \<Rightarrow> var set" where
+"fv_msg m = fv (embed m)"
+
+(* substs *)
+type_synonym subst_msg = "var \<Rightarrow> msg"
+fun embed_subst :: "subst_msg \<Rightarrow> (var \<Rightarrow> msg_term)" where
+"embed_subst s = embed o s"
+fun subst_from_embed :: "(var \<Rightarrow> msg_term) \<Rightarrow> subst_msg"  where
+"subst_from_embed s = msg_of_term o s"
+lemma embed_subst_from_embed [simp]: "wf_subst arity x \<Longrightarrow> embed \<circ> (msg_of_term \<circ> x) = x"
+  by(auto)
+
+(* sapply *)
+definition sapply_msg :: "subst_msg \<Rightarrow> msg \<Rightarrow> msg" where
+"sapply_msg s m = msg_of_term (sapply (embed_subst s) (embed m))"
+
+(* unifies *)
+type_synonym eq_msg = "msg \<times> msg"
+fun embed_eq :: "eq_msg \<Rightarrow> (symbol, var) equation" where
+"embed_eq (a, b) = (embed a, embed b)"
+
+definition unifies_msg :: "subst_msg \<Rightarrow> eq_msg \<Rightarrow> bool" where
+  "unifies_msg s eq = unifies (embed_subst s) (embed_eq eq)"
+
+(* unifiess *)
+definition unifiess_msg :: "subst_msg \<Rightarrow> eq_msg list \<Rightarrow> bool" where
+  "unifiess_msg s eqs = unifiess (embed_subst s) (map embed_eq eqs)"
+
+(* unify *)
+fun bind:: "('a\<Rightarrow>'b) \<Rightarrow> 'a option \<Rightarrow> 'b option" where
+"bind f x = (case x of None \<Rightarrow> None | (Some x) \<Rightarrow> Some (f x))"
+
+definition unify_msg :: "eq_msg list \<Rightarrow> subst_msg option" where
+"unify_msg eqs = bind subst_from_embed (unify (map embed_eq eqs))"
+
+
+(* (e) *)
+lemma unify_msg_return: "unify_msg l = Some \<sigma> \<Longrightarrow> unifiess_msg \<sigma> l"
+proof -
+  let ?s="map embed_eq l"
+  assume returns:"unify_msg l = Some \<sigma>"
+(* first we need to show that x is well formed *)
+  then obtain x where xdef:"unify ?s = Some x" and sigmadef:"\<sigma> = msg_of_term \<circ> x"
+    by(auto simp add:unify_msg_def unifiess_msg_def split:option.split_asm)
+  have "wf_eqs arity ?s" by(auto)
+  from xdef and this have "wf_subst arity x" by(rule wf_subst_unify)
+(* now we can use the embedding easily *)
+  show ?thesis
+    apply(auto simp add:unify_msg_def xdef sigmadef unifiess_msg_def)
+    apply(rule unify_return)
+  apply(simp only:xdef `wf_subst arity x` embed_subst_from_embed)
+    done
+qed
 
 end
