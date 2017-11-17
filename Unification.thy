@@ -22,7 +22,7 @@ fun sapply :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term \<Rightarrow> ('f, 'v)
 
 print_theorems
 
-fun scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75) where
+definition scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75) where
   "scomp \<sigma> \<tau> = (\<lambda>x. \<sigma> \<cdot> (\<tau> x))"
 
 
@@ -40,31 +40,31 @@ lemma sapply_cong: "\<lbrakk>\<And>x. x \<in> fv t \<Longrightarrow> \<sigma> x 
   done
 
 lemma scomp_sapply [simp]: "(\<sigma> \<circ>s \<tau>) x = \<sigma> \<cdot> (\<tau> x)"
-  by simp
+  by (simp add: scomp_def)
 
 lemma sapply_scomp_distr [simp]: "(\<sigma> \<circ>s \<tau>) \<cdot> t = \<sigma> \<cdot> (\<tau> \<cdot> t)"
-  apply simp
+  apply (simp add: scomp_def)
   apply (induction t rule: fv.induct)
    apply auto
   done
 
 lemma scomp_assoc: "(\<sigma> \<circ>s \<tau>) \<circ>s \<rho> = \<sigma> \<circ>s (\<tau> \<circ>s \<rho>)"
 proof -
-  have "(\<sigma> \<circ>s \<tau>) \<circ>s \<rho> = (\<lambda>x. (\<sigma> \<circ>s \<tau>) \<cdot> \<rho> x)" by simp
+  have "(\<sigma> \<circ>s \<tau>) \<circ>s \<rho> = (\<lambda>x. (\<sigma> \<circ>s \<tau>) \<cdot> \<rho> x)" by (simp add: scomp_def)
   also have "... = (\<lambda>x. \<sigma> \<cdot> \<tau> \<cdot> \<rho> x)" by (simp only: sapply_scomp_distr)
-  also have "... = \<sigma> \<circ>s (\<tau> \<circ>s \<rho>)" by simp
+  also have "... = \<sigma> \<circ>s (\<tau> \<circ>s \<rho>)" by (simp add: scomp_def)
   finally show ?thesis .
 qed
 
 lemma scomp_var [simp]: "\<sigma> \<circ>s Var = \<sigma>"
-  by simp
+  by (simp add: scomp_def)
 
 lemma var_sapply [simp]: "Var \<cdot> t = t"
   apply (induction t rule: fv.induct)
   by (auto simp add: map_idI)
 
 lemma var_scomp [simp]: "Var \<circ>s \<sigma> = \<sigma>"
-  by simp
+  by (simp add: scomp_def)
 
 
 (********************************** definitions ****************************)
@@ -78,16 +78,19 @@ definition sran :: "('f, 'v) subst \<Rightarrow> ('f, 'v) term set" where
 definition svran :: "('f, 'v) subst \<Rightarrow> 'v set" where
   "svran \<sigma> = (\<Union> t \<in> sran \<sigma>. fv t)"
 
-lemma sdom_elim [elim]: "\<sigma> x \<noteq> Var x \<Longrightarrow> x \<in> sdom \<sigma>"
+lemma sdom_intro [intro]: "\<sigma> x \<noteq> Var x \<Longrightarrow> x \<in> sdom \<sigma>"
   by (simp add: sdom_def)
 
-lemma sdom_intro [intro]: "x \<in> sdom \<sigma> \<Longrightarrow> \<sigma> x \<noteq> Var x"
+lemma sdom_dest [dest]: "x \<in> sdom \<sigma> \<Longrightarrow> \<sigma> x \<noteq> Var x"
   by (simp add: sdom_def) 
 
-lemma svran_elim [elim]: "\<lbrakk> x \<in> sdom \<sigma>; y \<in> fv (\<sigma> x) \<rbrakk> \<Longrightarrow> y \<in> svran \<sigma>"
+lemma svran_intro [intro]: "\<lbrakk> x \<in> sdom \<sigma>; y \<in> fv (\<sigma> x) \<rbrakk> \<Longrightarrow> y \<in> svran \<sigma>"
   by (auto simp add: sdom_def sran_def svran_def)
 
-lemma svran_intro [intro]: "y \<in> svran \<sigma> \<Longrightarrow> (\<exists>x \<in> sdom \<sigma>. y \<in> fv (\<sigma> x))"
+lemma svran_elim [elim]: "y \<in> svran \<sigma> \<Longrightarrow> (\<And>x. x \<in> sdom \<sigma> \<Longrightarrow> y \<in> fv (\<sigma> x) \<Longrightarrow> P) \<Longrightarrow> P"
+  by (auto simp add: sdom_def sran_def svran_def)
+
+lemma svran_dest [dest]: "y \<in> svran \<sigma> \<Longrightarrow> (\<exists>x \<in> sdom \<sigma>. y \<in> fv (\<sigma> x))"
   by (auto simp add: sdom_def sran_def svran_def)
 
 
@@ -110,18 +113,59 @@ lemma svran_single_non_trivial [simp]: "t \<noteq> Var x \<Longrightarrow> svran
 (*lemma img_subst: "\<forall>x. \<sigma> x = Var y \<Longrightarrow> y \<in> (UNIV - sdom \<sigma>) \<union> svran \<sigma>"*)
 
 lemma fv_sapply_sdom_svran: "x \<in> fv (\<sigma> \<cdot> t) \<Longrightarrow> x \<in> (fv t - sdom \<sigma>) \<union> svran \<sigma>"
-  apply (simp add: fv_sapply)
-  apply (auto)
+proof (induction t)
+  case (Var y)
+  then have "x \<in> (\<Union>x \<in> fv (Var y). fv (\<sigma> x))" by (simp add: fv_sapply)
+  then have "x \<in> fv (\<sigma> y)" by simp
+  then show ?case 
+proof (cases "\<sigma> y = Var y")
+  case True
+  then have "x \<in> {y}" using \<open>x \<in> fv (\<sigma> y)\<close> by simp
+  then have 1: "x = y" by simp
+  have 2: "y \<in> fv (Var y)" by simp
+  have 3: "y \<notin> sdom \<sigma>" using \<open>\<sigma> y = Var y\<close> by (simp add: sdom_def)
+  from 1 2 3 have "x \<in> fv (Var y) - sdom \<sigma>" by simp
+  then show ?thesis by auto
+next
+  case False
+  then have "y \<in> sdom \<sigma>" by (simp add: sdom_def)
+  then have "x \<in> svran \<sigma>" using \<open>x \<in> fv (\<sigma> y)\<close> by auto
+  then show ?thesis by simp
+qed
+next
+  case (Fun x1a x2)
+  then show ?case by auto
+qed
 
 lemma sdom_scomp: "sdom (\<sigma> \<circ>s \<tau>) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
   by (auto simp add: sdom_def)
 
 lemma svran_scomp: "svran (\<sigma> \<circ>s \<tau>) \<subseteq> svran \<sigma> \<union> svran \<tau>"
-  apply (auto simp add: svran_intro)
-  apply (rule svran_elim)
-  apply (auto)
-  apply (simp add: svran_intro)
-
+proof (rule subsetI)
+  fix x
+  assume "x \<in> svran (\<sigma> \<circ>s \<tau>)"
+  then obtain y where 0: "y \<in> sdom (\<sigma> \<circ>s \<tau>)" "x \<in> fv ((\<sigma> \<circ>s \<tau>) y)" by auto
+  then have "x \<in> fv (\<sigma> \<cdot> (\<tau> y))" by (simp only: scomp_def)
+  then have 1: "x \<in> (fv (\<tau> y) - sdom \<sigma>) \<or> x \<in> svran \<sigma>" by (blast dest: fv_sapply_sdom_svran)
+  show "x \<in> svran \<sigma> \<union> svran \<tau>"
+  proof(subst Un_commute, rule UnCI)
+    assume "x \<notin> svran \<sigma>"
+    then have "x \<in> (fv (\<tau> y) - sdom \<sigma>)" using 1 by simp
+    then have 2: "x \<in> fv (\<tau> y)" by simp
+    then show "x \<in> svran \<tau>"
+    proof (cases "y \<in> sdom \<tau>")
+      case True
+      then have "x \<in> svran \<tau>" using \<open>x \<in> fv (\<tau> y)\<close> by (auto)
+      then show ?thesis by simp
+    next
+      case False
+      then have "\<tau> y = Var y" by (simp add: sdom_def)
+      then have "x = y" using 2 by auto
+      then have False  using \<open>x \<in> (fv (\<tau> y) - sdom \<sigma>)\<close> using \<open>x = y\<close> \<open>y \<notin> sdom \<tau>\<close> sdom_scomp[of \<sigma> \<tau>] 0 by auto
+      then show ?thesis by simp
+    qed
+  qed
+qed
 
 (**************************************** definitions *********************************)
 
@@ -153,13 +197,7 @@ lemma fv_sapply_eqs: "fv_eqs (sapply_eqs \<sigma> l) = (\<Union>x \<in> set l. f
   by auto
 
 lemma sapply_scomp_distrib_eq: "sapply_eq (\<sigma> \<circ>s \<tau>) (a,b) = (\<sigma> \<cdot> (\<tau> \<cdot> a), \<sigma> \<cdot> (\<tau> \<cdot> b))"
-  apply (simp)
-  apply (rule conjI)
-  apply (induction a rule: fv.induct)
-    apply auto
-  apply (induction b rule: fv.induct)
-   apply auto
-  done
+  by (simp)
 
 lemma sapply_scomp_distrib_eqs: "sapply_eqs (\<sigma> \<circ>s \<tau>) l = map (\<lambda>x. sapply_eq (\<sigma> \<circ>s \<tau>) x) l"
   apply (induction l)
@@ -195,11 +233,11 @@ function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst 
 | "unify ((Fun f l1, Fun g l2) # xs) = (if g = f then (if length l2 = length l1 then unify (xs @ (zip l1 l2)) else None) else None)"
 by pat_completeness auto
 termination 
-  by (relation "measures [
+  apply (relation "measures [
   (\<lambda>U. card (fv_eqs U)), 
   (\<lambda>U. measure2 U), 
   (\<lambda>U. length U)]")
-  (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm)
+  apply (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm)
 
 print_theorems
 
