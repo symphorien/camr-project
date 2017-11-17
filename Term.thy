@@ -97,11 +97,11 @@ definition scomp_msg:: "subst_msg \<Rightarrow> subst_msg \<Rightarrow> subst_ms
 "scomp_msg s t = subst_from_embed ((embed_subst s) \<circ>s (embed_subst t))"
 
 lemma embed_scomp_wf: "wf_subst arity ((embed_subst t) \<circ>s (embed_subst s))"
-  by(simp add:wf_subst_scomp del:scomp.simps)
+  by(simp add:wf_subst_scomp)
 
 lemma sapply_msg_scomp_msg:
 "sapply_msg (scomp_msg t s) c = sapply_msg t (sapply_msg s c)" (is "?lhs = ?rhs")
-  by(auto simp add:sapply_msg_def scomp_msg_def embed_scomp_wf wf_term_sapply simp del:scomp.simps)
+  by(auto simp add:sapply_msg_def scomp_msg_def embed_scomp_wf wf_term_sapply)
 
 (* equations *)
 type_synonym eq_msg = "msg \<times> msg"
