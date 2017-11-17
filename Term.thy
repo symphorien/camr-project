@@ -74,26 +74,36 @@ definition fv_msg:: "msg \<Rightarrow> var set" where
 
 (* substs *)
 type_synonym subst_msg = "var \<Rightarrow> msg"
-fun embed_subst :: "subst_msg \<Rightarrow> (var \<Rightarrow> msg_term)" where
+definition embed_subst :: "subst_msg \<Rightarrow> (var \<Rightarrow> msg_term)" where
 "embed_subst s = embed o s"
-fun subst_from_embed :: "(var \<Rightarrow> msg_term) \<Rightarrow> subst_msg"  where
+definition subst_from_embed :: "(var \<Rightarrow> msg_term) \<Rightarrow> subst_msg"  where
 "subst_from_embed s = msg_of_term o s"
 
-lemma embed_subst_from_embed [simp]: "wf_subst arity x \<Longrightarrow> embed \<circ> (msg_of_term \<circ> x) = x"
+lemma embed_subst_from_embed [simp]: "wf_subst arity x \<Longrightarrow> embed_subst (subst_from_embed x) = x"
 proof(induction rule:wf_subst.induct)
   case (1 \<sigma>)
-  then show ?case by(auto simp add:fun_eq_iff)
+  then show ?case by(auto simp add:fun_eq_iff embed_subst_def subst_from_embed_def)
 qed
+
+lemma wf_subst_embed_subst[simp]: "wf_subst arity (embed_subst s)"
+  by(auto intro!:wf_subst.intros simp add:embed_subst_def)
 
 (* sapply *)
 definition sapply_msg :: "subst_msg \<Rightarrow> msg \<Rightarrow> msg" where
 "sapply_msg s m = msg_of_term (sapply (embed_subst s) (embed m))"
 
-lemma sapply_msg_msg_of_term [simp]:
-"wf_subst arity s \<Longrightarrow> sapply_msg (msg_of_term \<circ> s)= msg_of_term o (sapply s) o embed"
-  by(auto simp add:sapply_msg_def)
+(* scomp *)
+definition scomp_msg:: "subst_msg \<Rightarrow> subst_msg \<Rightarrow> subst_msg" where
+"scomp_msg s t = subst_from_embed ((embed_subst s) \<circ>s (embed_subst t))"
 
-(* unifies *)
+lemma embed_scomp_wf: "wf_subst arity ((embed_subst t) \<circ>s (embed_subst s))"
+  by(simp add:wf_subst_scomp del:scomp.simps)
+
+lemma sapply_msg_scomp_msg:
+"sapply_msg (scomp_msg t s) c = sapply_msg t (sapply_msg s c)" (is "?lhs = ?rhs")
+  by(auto simp add:sapply_msg_def scomp_msg_def embed_scomp_wf wf_term_sapply simp del:scomp.simps)
+
+(* equations *)
 type_synonym eq_msg = "msg \<times> msg"
 fun embed_eq :: "eq_msg \<Rightarrow> (symbol, var) equation" where
 "embed_eq (a, b) = (embed a, embed b)"
@@ -117,6 +127,7 @@ qed
 lemma "eq_from_embed_embed_eq" [simp]: "eq_from_embed (embed_eq e) = e"
   by(cases e;auto)
 
+(* unifies *)
 definition unifies_msg :: "subst_msg \<Rightarrow> eq_msg \<Rightarrow> bool" where
   "unifies_msg s eq = unifies (embed_subst s) (embed_eq eq)"
 
@@ -138,7 +149,7 @@ proof -
   let ?s="map embed_eq l"
   assume returns:"unify_msg l = Some \<sigma>"
 (* first we need to show that x is well formed *)
-  then obtain x where xdef:"unify ?s = Some x" and sigmadef:"\<sigma> = msg_of_term \<circ> x"
+  then obtain x where xdef:"unify ?s = Some x" and sigmadef:"\<sigma> = subst_from_embed x"
     by(auto simp add:unify_msg_def unifiess_msg_def split:option.split_asm)
   have "wf_eqs arity ?s" 
     by(auto intro!:wf_eqs.intros wf_eq.intros)
@@ -184,7 +195,7 @@ lemma l3_msg:
 proof -
   let ?l' = "map embed_eq l"
   from assms obtain s'
-    where return:"unify ?l' = Some s'" and sdef:"s = msg_of_term \<circ> s'"
+    where return:"unify ?l' = Some s'" and sdef:"s = subst_from_embed s'"
     by(auto simp add:unify_msg_def sdom_msg_def split:option.split_asm)
   have wf:"wf_eqs arity ?l'" by simp
   from return  and this have wfs:"wf_subst arity s'" by(rule wf_subst_unify)
