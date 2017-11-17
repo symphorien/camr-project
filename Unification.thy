@@ -323,6 +323,9 @@ inductive wf_subst :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) subst \<Rig
 inductive wf_eq :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equation \<Rightarrow> bool" where
   "\<lbrakk> wf_term arity a; wf_term arity b \<rbrakk> \<Longrightarrow> wf_eq arity (a,b)"
 
+lemma wf_eqE: "wf_eq arity (a, b) \<Longrightarrow> (wf_term arity a \<Longrightarrow> wf_term arity b \<Longrightarrow> P) \<Longrightarrow> P"
+  using wf_eq.cases by auto
+
 inductive wf_eqs :: "('f \<Rightarrow> nat) \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
   "\<lbrakk> \<forall>x \<in> set l. wf_eq arity x \<rbrakk> \<Longrightarrow> wf_eqs arity l" 
 
@@ -367,6 +370,9 @@ next
   qed
   then show "wf_term arity (\<sigma> \<cdot> ?t)" by(simp add:x)
 qed
+
+lemma wf_eq_sapply_eq: "\<lbrakk> wf_eq arity eq; wf_subst arity \<sigma> \<rbrakk> \<Longrightarrow> wf_eq arity (sapply_eq \<sigma> eq)"
+  by(cases eq; auto simp add:wf_term_sapply elim!:wf_eqE intro!:wf_eq.intros)
 
 lemma wf_subst_scomp: "\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> \<rbrakk> \<Longrightarrow> wf_subst arity (\<sigma> \<circ>s \<tau>)"
   by (simp add: wf_subst.simps wf_term_sapply)
