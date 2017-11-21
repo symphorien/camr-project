@@ -303,7 +303,9 @@ next
       next
         case False
         assume "b \<noteq> Var x"
+           and 11: "unify ((Var x, b) # xs) = Some \<sigma>" 
         then have "unify ((Var x, b) # xs) =  scomp_opt (unify ?term) (Var (x := b))" using \<open>x \<notin> fv b\<close> by simp
+        then have "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using 11 by simp
         then show ?thesis sorry
       qed
     qed 
@@ -325,8 +327,6 @@ next
   then have "unifiess \<sigma> xs" "unifiess \<sigma> (zip l1 l2)" by (auto simp add: unifiess_def)
   then have "\<forall>(a,b) \<in> set (zip l1 l2). unifies \<sigma> (a,b)" by (simp add: unifiess_def)
   then have "\<forall>(a,b) \<in> set (zip l1 l2). \<sigma> \<cdot> a = \<sigma> \<cdot> b" by (simp add: unifies.simps)
-  then have "map (sapply \<sigma>) l1 = map (sapply \<sigma>) l2" using \<open>length l2 = length l1\<close> by (auto simp add: list_eq_iff_nth_eq[symmetric])
-  then have "unifies \<sigma> (Fun f l1, Fun g l2)" 
   then have "\<sigma> \<cdot> (Fun f l1) = \<sigma> \<cdot> (Fun g l2)" using 10 by (auto intro: unifiess_def)
   then have "unifies \<sigma> (Fun f l1, Fun g l2)" using 10 by simp
   then show ?case by (auto simp add: unifiess_list unifiess_def)
@@ -334,7 +334,23 @@ qed
 
 
 lemma unify_mgu: "\<lbrakk>unify l = some \<sigma>; unifiess \<tau> l\<rbrakk> \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
-  sorry
+proof (induction l rule: unify.induct)
+  case 1
+  have "unify [] = Some Var" by simp
+  moreover have "\<forall>\<tau>. \<tau> \<circ>s Var = \<tau>" by auto
+  show ?case 
+    apply (rule exE)
+    apply (rule exI [where ?x = \<sigma>])
+next
+case (2 x b xs)
+  then show ?case sorry
+next
+case (3 v va x xs)
+then show ?case sorry
+next
+  case (4 f l1 g l2 xs)
+  then show ?case sorry
+qed
 
 lemma unify_sound: "unify l = Some \<sigma> \<Longrightarrow> is_mgu \<sigma> l"
   sorry
