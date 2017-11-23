@@ -131,4 +131,27 @@ inductive rer :: "system \<Rightarrow> subst_msg \<Rightarrow> system \<Rightarr
 definition rer_star :: "system \<Rightarrow>subst_msg \<Rightarrow> system \<Rightarrow> bool" ("(_)/\<leadsto>*[_]/ _ " [73,73,73]72) where
 "cs \<leadsto>*[s] cs' = ((cs, cs') \<in> (rtrancl { (x, y) . (x \<leadsto>[s] y) }))"
 
+(* (d) *)
+inductive simplec:: "constraint \<Rightarrow> bool" where
+"fvl a = {} \<Longrightarrow> fvl m = {} \<Longrightarrow> simplec (a|m}t)"
+
+definition simples:: "system \<Rightarrow> bool" where
+"simples cs = (\<forall> c \<in> cs. simplec c)"
+
+inductive is_red:: "system \<Rightarrow> subst_msg \<Rightarrow> bool" where
+"cs \<leadsto>*[s] cs' \<Longrightarrow> simples cs' \<Longrightarrow> t \<in> sol(cs') \<Longrightarrow> is_red cs (scomp_msg t s)"
+
+definition red:: "system \<Rightarrow> subst_msg set" where
+"red cs = {t . is_red cs t}"
+
+lemma redE: "x \<in> red cs \<Longrightarrow> (is_red cs x \<Longrightarrow> P) \<Longrightarrow> P"
+  by(simp add:red_def)
+ 
+lemma is_redE: "is_red cs u \<Longrightarrow>
+(\<And>t s cs'. u=scomp_msg t s \<Longrightarrow> cs \<leadsto>*[s] cs' \<Longrightarrow> simples cs' \<Longrightarrow> t \<in> sol(cs')  \<Longrightarrow> P)
+\<Longrightarrow> P"
+proof(cases rule:is_red.cases)
+qed(simp_all)
+
+
 end
