@@ -25,9 +25,84 @@ print_theorems
 definition scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75) where
   "scomp \<sigma> \<tau> = (\<lambda>x. \<sigma> \<cdot> (\<tau> x))"
 
+definition msize :: "('f, 'v) term \<Rightarrow> nat" where
+  "msize x = size_term (\<lambda>x. 0) (\<lambda>x. 0) x" 
 
 
 (******************************** lemmata **********************************) 
+
+lemma msize_term_diff: "\<lbrakk> msize a \<noteq> msize b \<rbrakk> \<Longrightarrow> a \<noteq> b"
+  apply (rule notI)
+  by (auto simp add: msize_def)
+
+lemma msize_gt_zero: "msize x > 0"
+  apply (cases x)
+  by (auto simp add: msize_def)
+
+lemma fv_msize_diff: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> msize (Var x) < msize b"
+proof (cases b)
+  assume "x \<in> fv b" and "b \<noteq> Var x"
+  case (Var x1)
+  then have "x = x1" using \<open>x \<in> fv b\<close> by (auto intro: fv.simps)
+  then have "b = Var x" using \<open>b = Var x1\<close> by simp
+  then have False using \<open>b \<noteq> Var x\<close> by simp
+  then show ?thesis by simp
+next
+  case (Fun f xs)
+  assume "x \<in> fv b" and "b \<noteq> Var x"
+  have "msize (Var x) = 1" by (simp add: msize_def)
+  have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>b = Fun f xs\<close> \<open>x \<in> fv b\<close> by simp
+  then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
+  have "0 < msize y" by (auto simp add: msize_gt_zero)
+  then have "0 < size_list msize xs" using \<open>y \<in> set xs\<close> by (simp add: size_list_estimation)
+  then have "size_list msize xs \<ge> 1" by simp
+  moreover have "msize = (size_term (\<lambda>x. 0) (\<lambda>x. 0))" using msize_def by auto
+  ultimately have "size_list (size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs \<ge> 1" by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
+  moreover have "msize b = (\<lambda>x. 0) f + size_list(size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs + 1" using \<open>b = Fun f xs\<close> by (auto simp add: msize_def) 
+  ultimately have "msize b \<ge> 2" by simp
+  then show ?thesis using \<open>msize (Var x) = 1\<close> by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
+qed
+
+lemma fv_msize_sapply_diff: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> b)"
+proof (induction b)
+  case (Var x)
+  then have "Var x \<noteq> Var x" by simp
+  moreover have "Var x = Var x" by simp
+  ultimately have False using \<open>Var x \<noteq> Var x\<close> by simp
+  then show ?case by simp
+next
+  case (Fun f xs)
+  assume "?x2a \<in> set xs \<Longrightarrow> x \<in> fv ?x2a \<Longrightarrow> ?x2a \<noteq> Var x \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> ?x2a)"
+  have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>x \<in> fv (Fun f xs)\<close> by simp
+  then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
+  then show ?case 
+  proof (cases "y = Var x")
+    case True
+    then show ?thesis sorry
+  next
+    case False
+    assume "y \<in> set xs \<Longrightarrow> x \<in> fv y \<Longrightarrow> y \<noteq> Var x \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> y)"
+    then have "msize (\<sigma> x) < msize (\<sigma> \<cdot> y)" using \<open>?x2a \<in> set xs \<Longrightarrow> x \<in> fv ?x2a \<Longrightarrow> ?x2a \<noteq> Var x \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> ?x2a)\<close>[of y] by simp
+    then show ?thesis sorry
+  qed
+qed
+  
+next
+  case (Fun f xs)
+  assume "x \<in> fv b" and "b \<noteq> Var x"
+  have "msize (Var x) = 1" by (simp add: msize_def)
+  have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>b = Fun f xs\<close> \<open>x \<in> fv b\<close> by simp
+  then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
+  have "0 < msize y" by (auto simp add: msize_gt_zero)
+  then have "0 < size_list msize xs" using \<open>y \<in> set xs\<close> by (simp add: size_list_estimation)
+  then have "size_list msize xs \<ge> 1" by simp
+  moreover have "msize = (size_term (\<lambda>x. 0) (\<lambda>x. 0))" using msize_def by auto
+  ultimately have "size_list (size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs \<ge> 1" by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
+  moreover have "msize b = (\<lambda>x. 0) f + size_list(size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs + 1" using \<open>b = Fun f xs\<close> by (auto simp add: msize_def) 
+  ultimately have "msize b \<ge> 2" by simp
+  then show ?thesis using \<open>msize (Var x) = 1\<close> by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
+qed
+
 
 lemma fv_sapply: "fv (\<sigma> \<cdot> t) = (\<Union>x \<in> fv t. fv (\<sigma> x))"
   apply (induction t rule: fv.induct)
@@ -219,6 +294,36 @@ lemma unifiess_list: "\<lbrakk> unifies \<sigma> x; unifiess \<sigma> xs \<rbrak
 lemma helper: "\<lbrakk> length l1 = length l2; (\<And>a b. (a,b) \<in> set (zip l1 l2) \<Longrightarrow> unifies \<sigma> (a,b)) \<rbrakk> \<Longrightarrow> unifiess \<sigma> (zip l1 l2)"
   apply (induction "zip l1 l2")
   by (auto simp add: unifiess_def)
+
+
+lemma in_fv_not_unifies: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> \<not>(\<exists>\<sigma>. unifies \<sigma> (Var x, b))"
+proof (rule notI)
+  assume "x \<in> fv b"
+     and "b \<noteq> Var x"
+     and "\<exists>\<sigma>. unifies \<sigma> (Var x, b)"
+  then obtain \<sigma> where "unifies \<sigma> (Var x, b)" by blast
+  then have "\<sigma> x = \<sigma> \<cdot> b" by (auto simp add: unifies.simps)
+  then show "False"
+  proof (cases b)
+    case (Var x1)
+    have "fv b = {x1}" using \<open>b = Var x1\<close> by simp
+    then have "x1 = x" using \<open>x \<in> fv b\<close> by simp
+    then have "b = Var x" using \<open>b = Var x1\<close> by simp
+    then show ?thesis using \<open>b \<noteq> Var x\<close> by simp
+  next
+    case (Fun f xs)
+    have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>b = Fun f xs\<close> \<open>x \<in> fv b\<close> by simp
+    then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
+    then have "size_term (\<lambda>x. 1) (\<lambda>x. 0) y \<ge> 1" using by (auto)
+    then have "size_term (\<lambda>x. 1) (\<lambda>x. 0) (Fun f xs) \<ge> 2" by simp
+    then have "size_term (\<lambda>x. 1) (\<lambda>x. 0) (Var x) < size_term (\<lambda>x. 1) (\<lambda>x. 0) (Fun f xs)" by simp
+    then have "Var x \<noteq> b" by auto
+    then have "\<sigma> \<cdot> y \<in> set (map (sapply \<sigma>) xs)" by simp
+    then have "fv (\<sigma> x) \<subseteq> fv (\<sigma> \<cdot> b)" by auto
+    then show ?thesis sorry 
+  qed
+
+(* \<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> size (Var x) < size b *)
 
 lemma "\<lbrakk> \<forall>(a,b) \<in> set (zip l1 l2). f a = f b; length l1 = length l2 \<rbrakk> \<Longrightarrow> map f l1 = map f l2"
 proof (induction "zip l1 l2")
