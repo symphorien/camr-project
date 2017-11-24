@@ -25,6 +25,11 @@ print_theorems
 definition scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75) where
   "scomp \<sigma> \<tau> = (\<lambda>x. \<sigma> \<cdot> (\<tau> x))"
 
+lemma sapply_sapply: "a \<cdot> b \<cdot> t = (scomp a b) \<cdot> t"
+  by(induction t,simp_all add:scomp_def)
+
+lemma scomp_assoc: "scomp (scomp a b) c = scomp a (scomp b c)"
+  by(simp add:scomp_def fun_eq_iff sapply_sapply)
 
 (********************************* size argument ****************************)
 

@@ -124,6 +124,9 @@ lemma sapply_msg_scomp_msg:
 lemma scomp_variable[simp]: "scomp_msg Variable s = s" "scomp_msg s Variable = s"
   by(simp_all add:scomp_msg_def)
 
+lemma scomp_msg_assoc: "scomp_msg (scomp_msg a b) c = scomp_msg a (scomp_msg b c)" (is "?lhs = ?rhs")
+  by(simp_all add:scomp_msg_def embed_scomp_wf scomp_assoc)
+
 (* equations *)
 type_synonym eq_msg = "msg \<times> msg"
 fun embed_eq :: "eq_msg \<Rightarrow> (symbol, var) equation" where

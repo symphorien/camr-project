@@ -274,4 +274,17 @@ proof(induction cs s cs' arbitrary: t rule:rer.induct)
   from this and half and half2 show ?case by(simp add:sol_concat)
 qed
 
+lemma sol_rer_star: "cs \<leadsto>*[s] cs' \<Longrightarrow> simples cs' \<Longrightarrow> t \<in> sol(cs') \<Longrightarrow> (scomp_msg t s) \<in> sol cs"
+proof(induction cs s cs' arbitrary: t rule:rer_star.induct)
+case (rer_star_id cs)
+  then show ?case by simp
+next
+  case (rer_star_step cs s cs'' t cs' u)
+  from `simples cs'` and `u \<in> sol cs'` have "scomp_msg u t \<in> sol cs''" by(rule rer_star_step)
+  from `cs \<leadsto>[s] cs''` and this have "scomp_msg (scomp_msg u t) s \<in> sol cs" by(rule sol_rer)
+  then show ?case by(simp add:scomp_msg_assoc)
+qed
+
+lemma cs_sound: "red cs \<subseteq> sol cs"
+  by(auto simp add:sol_rer_star elim!:redE is_redE)
 end
