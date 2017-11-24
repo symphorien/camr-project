@@ -125,7 +125,7 @@ rer1_unify: "(\<And> z. t\<noteq>Variable z) \<Longrightarrow> u \<in> set m \<u
 | rer1_sdec: "x=Sym_encrypt u k \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
  [  ((u#head@tail) | (x#m) } t) ,
     ((head@tail) | (x#m) } k)     ]"
-| rer1_adec: "x=Pub_encrypt u (Variable ''intruder'') \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
+| rer1_adec: "x=Pub_encrypt u (Const ''intruder'') \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
  [ ((u#head@tail) | (x#m) } t) ]"
 | rer1_ksub: "Pub_encrypt u (Variable agent) \<in> set a \<Longrightarrow>
 s=(%v. Variable (if v=agent then ''intruder'' else v)) \<Longrightarrow>
@@ -196,54 +196,77 @@ next
   case (rer1_comp_sign a m t)
   then show ?case sorry
 next
-  case (rer1_proj x u v head tail m t)
-  then show ?case sorry
+  case (rer1_proj x u u' head tail m t)
+  show ?case
+  proof -
+    from rer1_proj have xdef:"x = Concat u u'"
+      and sol:"v \<in> sol [(u # u' # head @ tail)|(x # m)} t ]"
+          (is "v \<in> sol [?c]") .
+    let ?T = "set (map (sapply_msg v) (x#m@head@tail))"
+
+    from sol have "solved (sapplyc v ?c)" by(auto elim:solE)
+    then have cut1:"(insert (sapply_msg v u) (insert (sapply_msg v u') ?T)) \<turnstile> (sapply_msg v t)"
+      by(auto simp add:sapplyl_def sapplyc_def elim!: solvedE)(simp only:Un_commute Un_assoc insert_commute)
+
+    have pair:"(insert (sapply_msg v u') ?T) \<turnstile> (sapply_msg v x)" (is "?T' \<turnstile> _")
+      by(rule deduce_axiom)(simp add:sapply_msg_simps xdef)
+    then have "?T' \<turnstile> (sapply_msg v u)" by(auto intro:deduce_proj1 simp add:sapply_msg_simps xdef)
+    from cut1 and this have cut2:"?T' \<turnstile> (sapply_msg v t)" by(rule deduce_cut)
+    have "?T \<turnstile> (sapply_msg v x)"
+      by(rule deduce_axiom)(simp add:sapply_msg_simps xdef)
+    then have "?T \<turnstile> (sapply_msg v u')" by(auto intro:deduce_proj2 simp add:sapply_msg_simps xdef)
+    from cut2 and this have "?T \<turnstile> (sapply_msg v t)" by(rule deduce_cut)
+    then show "scomp_msg v Variable \<in> sol [(head @ x # tail)|m} t ]"
+      by(auto simp add:sapplyc_def Un_commute sapplyl_def intro!:solI solvedI)
+  qed
 next
   case (rer1_sdec x u k head tail m t)
   show ?case
   proof -
     from rer1_sdec have xdef:"x = Sym_encrypt u k"
-      and sol:"v \<in> sol [(u # head @ tail)|(x # m)} t , (head @ tail)|(x # m)} k ]" (is "v \<in> sol [?c1, ?c2]")
-      .
+      and sol:"v \<in> sol [(u # head @ tail)|(x # m)} t , (head @ tail)|(x # m)} k ]"
+          (is "v \<in> sol [?c1, ?c2]") .
     let ?T = "set (map (sapply_msg v) (x#m@head@tail))"
 
     have "sapply_msg v x \<in> ?T" by simp
     then have "deduce ?T (sapply_msg v x)" by(rule deduce_axiom)
-    moreover have "sapply_msg v x = Sym_encrypt (sapply_msg v u) (sapply_msg v k)"
+    then have sdec1:"deduce ?T (Sym_encrypt (sapply_msg v u) (sapply_msg v k))"
       by(simp add:sapply_msg_simps xdef)
-    ultimately have sdec1:"deduce ?T (Sym_encrypt (sapply_msg v u) (sapply_msg v k))"
-      by simp
 
     from sol have "solved (sapplyc v ?c2)" by(auto elim:solE)
-    then have "(set (sapplyl v (head@tail)) \<union> set (sapplyl v (x#m))) \<turnstile> (sapply_msg v k)"
-      by(auto simp add:sapplyc_def elim:solvedE)
-    moreover have "(set (sapplyl v (head@tail)) \<union> set (sapplyl v (x#m))) = ?T"
-      by(simp add:sapplyl_def Un_commute)
-    ultimately have sdec2:"?T \<turnstile> (sapply_msg v k)"
-      by(auto simp add:sapplyl_def)
+    then have sdec2:"?T \<turnstile> (sapply_msg v k)"
+      by(auto simp add:sapplyl_def sapplyc_def Un_commute elim!: solvedE)
 
     from sdec1 and sdec2 have cut1:"?T \<turnstile> (sapply_msg v u)" by(rule deduce_sym_decrypt)
 
-    let ?rewrite = "insert (sapply_msg v u) ?T" 
     from sol have "solved (sapplyc v ?c1)" by(auto elim:solE)
-    then have "(set (sapplyl v (u#head@tail)) \<union> set (sapplyl v (x#m))) \<turnstile> (sapply_msg v t)"
-      by(auto simp add:sapplyc_def elim:solvedE)
-    moreover have "(set (sapplyl v (u#head@tail)) \<union> set (sapplyl v (x#m))) = ?rewrite"
-      by(simp add:sapplyl_def Un_commute)
-    ultimately have cut2:"?rewrite \<turnstile> (sapply_msg v t)"
-      by(auto simp add:sapplyl_def)
-
-    let ?a="(head @ x # tail)"
+    then have cut2:"insert (sapply_msg v u) ?T \<turnstile> (sapply_msg v t)"
+      by(auto simp add:sapplyl_def sapplyc_def Un_commute elim:solvedE)
 
     from cut2 and cut1 have "?T \<turnstile> (sapply_msg v t)" by(rule deduce_cut)    
-    then have "solved (sapplyc v (?a|m}t))"
+    then show "scomp_msg v Variable \<in> sol [(head @ x # tail)|m} t ]"
       by(auto simp add:sapplyc_def Un_commute sapplyl_def intro!:solI solvedI)
-    then have "v \<in> sol [?a|m}t]" by(auto intro:solI)
-    then show "scomp_msg v Variable \<in> sol [(head @ x # tail)|m} t ]" by(simp)
   qed
 next
   case (rer1_adec x u head tail m t)
-  then show ?case sorry
+  show ?case
+  proof -
+    from rer1_adec have xdef:"x = Pub_encrypt u (Const ''intruder'')" (is "x = Pub_encrypt u ?i")
+      and sol:"v \<in> sol [(u # head @ tail)|(x # m)} t ]"
+          (is "v \<in> sol [?c]").
+    let ?T = "set (map (sapply_msg v) (x#m@head@tail))"
+
+    from sol have "solved (sapplyc v ?c)" by(auto elim:solE)
+    then have cut1:"(insert (sapply_msg v u) ?T) \<turnstile> (sapply_msg v t)"
+      by(auto simp add:sapplyl_def sapplyc_def elim!: solvedE)(simp only:Un_commute Un_assoc insert_commute)
+
+    have "?T \<turnstile> (sapply_msg v x)"
+      by(rule deduce_axiom)(simp add:sapply_msg_simps xdef)
+    then have "?T \<turnstile> (sapply_msg v u)" by(auto intro:deduce_pub_decrypt simp add:sapply_msg_simps xdef)
+    from cut1 and this have "?T \<turnstile> (sapply_msg v t)" by(rule deduce_cut)
+    then show "scomp_msg v Variable \<in> sol [(head @ x # tail)|m} t ]"
+      by(auto simp add:sapplyc_def Un_commute sapplyl_def intro!:solI solvedI)
+  qed
 next
   case (rer1_ksub u agent a s m t)
   then show ?case sorry
