@@ -88,9 +88,26 @@ qed
 lemma wf_subst_embed_subst[simp]: "wf_subst arity (embed_subst s)"
   by(auto intro!:wf_subst.intros simp add:embed_subst_def)
 
+lemma subst_from_embed_embed_subst[simp]:"subst_from_embed (embed_subst s) = s"
+  by(auto simp add:embed_subst_def subst_from_embed_def)
+
+lemma embed_subst_Variable[simp]:"embed_subst Variable = Var"
+  by(auto simp add:embed_subst_def)
+
+lemma subst_from_embed_Var[simp]:"subst_from_embed Var = Variable"
+  by(auto simp add:subst_from_embed_def)
+
 (* sapply *)
 definition sapply_msg :: "subst_msg \<Rightarrow> msg \<Rightarrow> msg" where
 "sapply_msg s m = msg_of_term (sapply (embed_subst s) (embed m))"
+
+lemma sapply_msg_simps:
+"sapply_msg s (Hash x) = Hash (sapply_msg s x)"
+"sapply_msg s (Concat x y) = Concat (sapply_msg s x) (sapply_msg s y)"
+"sapply_msg s (Sym_encrypt x y) = Sym_encrypt (sapply_msg s x) (sapply_msg s y)"
+"sapply_msg s (Pub_encrypt x y) = Pub_encrypt (sapply_msg s x) (sapply_msg s y)"
+"sapply_msg s (Sign x y) = Sign (sapply_msg s x) (sapply_msg s y)"
+  by(auto simp add:sapply_msg_def)
 
 (* scomp *)
 definition scomp_msg:: "subst_msg \<Rightarrow> subst_msg \<Rightarrow> subst_msg" where
@@ -102,6 +119,9 @@ lemma embed_scomp_wf: "wf_subst arity ((embed_subst t) \<circ>s (embed_subst s))
 lemma sapply_msg_scomp_msg:
 "sapply_msg (scomp_msg t s) c = sapply_msg t (sapply_msg s c)" (is "?lhs = ?rhs")
   by(auto simp add:sapply_msg_def scomp_msg_def embed_scomp_wf wf_term_sapply)
+
+lemma scomp_variable[simp]: "scomp_msg Variable s = s" "scomp_msg s Variable = s"
+  by(simp_all add:scomp_msg_def)
 
 (* equations *)
 type_synonym eq_msg = "msg \<times> msg"
@@ -134,6 +154,15 @@ definition unifies_msg :: "subst_msg \<Rightarrow> eq_msg \<Rightarrow> bool" wh
 (* unifiess *)
 definition unifiess_msg :: "subst_msg \<Rightarrow> eq_msg list \<Rightarrow> bool" where
   "unifiess_msg s eqs = unifiess (embed_subst s) (map embed_eq eqs)"
+
+lemma unifiess_msgE: "unifiess_msg s eqs \<Longrightarrow> ((\<And> eq. eq \<in> set eqs \<Longrightarrow> unifies_msg s eq) \<Longrightarrow> P) \<Longrightarrow> P"
+  by(auto simp add:unifies_msg_def unifiess_msg_def unifiess_def)
+
+lemma unifies_msgE: "unifies_msg s (a, b) \<Longrightarrow> (sapply_msg s a = sapply_msg s b \<Longrightarrow> P) \<Longrightarrow> P"
+  apply(simp add:unifies_msg_def)
+  apply(cases rule:unifies.cases)
+   apply(auto simp add:sapply_msg_def)
+  done
 
 (* unify *)
 fun bind:: "('a\<Rightarrow>'b) \<Rightarrow> 'a option \<Rightarrow> 'b option" where
