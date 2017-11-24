@@ -109,27 +109,28 @@ qed
 (* (c) *)
 inductive rer1 :: "constraint \<Rightarrow> subst_msg \<Rightarrow> system \<Rightarrow> bool "
 ("(_)/\<leadsto>1[_]/ (_)" [64,64,64]63)    where
-rer1_unify: "t\<noteq>Variable _ \<Longrightarrow> u \<in> set m \<union> set a \<Longrightarrow> unify_msg [(t,u)] = Some s \<Longrightarrow> (a|m}t)\<leadsto>1[s] {}"
-| rer1_comp_hash:"(a|m} (Hash t)) \<leadsto>1[(%x.(Variable x))] {(a|m} t)}"
-| rer1_comp_concat:"(a|m} (Concat t u)) \<leadsto>1[(%x.(Variable x))] {a|m} t, a|m} u}"
-| rer1_comp_sym_encrypt:"(a|m} (Sym_encrypt t u)) \<leadsto>1[(%x.(Variable x))] {a|m} t, a|m} u}"
-| rer1_comp_pub_encrypt:"(a|m} (Pub_encrypt t u)) \<leadsto>1[(%x.(Variable x))] {a|m} t, a|m} u}"
-| rer1_comp_sign:"(a|m} (Sign t (Const ''intruder''))) \<leadsto>1[(%x.(Variable x))] {a|m} t}"
-| rer1_proj: "((Concat u v)#a) | m } t \<leadsto>1[(%x. Variable x)] {((u#v#a) | ((Concat u v)#m) } t)}"
-| rer1_sdec: "((Sym_encrypt u k)#a) | m } t \<leadsto>1[(%x. Variable x)]
- {  ((u#a) | ((Sym_encrypt u k)#m) } t) ,
-    (a | ((Sym_encrypt u k)#m) } k)     }"
-| rer1_adec: "((Pub_encrypt u (Variable ''intruder''))#a) | m } t \<leadsto>1[(%x. Variable x)]
- { ((u#a) | ((Pub_encrypt u (Variable ''intruder''))#m) } t) }"
-| rer1_ksub: "x=Pub_encrypt u (Variable agent) \<Longrightarrow>
+rer1_unify: "(\<And> z. t\<noteq>Variable z) \<Longrightarrow> u \<in> set m \<union> set a \<Longrightarrow> unify_msg [(t,u)] = Some s \<Longrightarrow> (a|m}t)\<leadsto>1[s] {}"
+| rer1_comp_hash:"(a|m} (Hash t)) \<leadsto>1[Variable] {(a|m} t)}"
+| rer1_comp_concat:"(a|m} (Concat t u)) \<leadsto>1[Variable] {a|m} t, a|m} u}"
+| rer1_comp_sym_encrypt:"(a|m} (Sym_encrypt t u)) \<leadsto>1[Variable] {a|m} t, a|m} u}"
+| rer1_comp_pub_encrypt:"(a|m} (Pub_encrypt t u)) \<leadsto>1[Variable] {a|m} t, a|m} u}"
+| rer1_comp_sign:"(a|m} (Sign t (Const ''intruder''))) \<leadsto>1[Variable] {a|m} t}"
+| rer1_proj: "x=Concat u v \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable] {((u#v#head@tail) | (x#m) } t)}"
+| rer1_sdec: "x=Sym_encrypt u k \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
+ {  ((u#head@tail) | (x#m) } t) ,
+    ((head@tail) | (x#m) } k)     }"
+| rer1_adec: "x=Pub_encrypt u (Variable ''intruder'') \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
+ { ((u#head@tail) | (x#m) } t) }"
+| rer1_ksub: "Pub_encrypt u (Variable agent) \<in> set a \<Longrightarrow>
 s=(%v. Variable (if v=agent then ''intruder'' else v)) \<Longrightarrow>
-(x#a) | m } t  \<leadsto>1[s] { sapplyc s ((x#a) | m } t) }"
+a | m } t  \<leadsto>1[s] { sapplyc s (a | m } t) }"
 
 inductive rer :: "system \<Rightarrow> subst_msg \<Rightarrow> system \<Rightarrow> bool " ("(_)/\<leadsto>[_]/ _ " [73,73,73]72) where
 "c \<leadsto>1[s] cs \<Longrightarrow> (insert c cs') \<leadsto>[s] (cs \<union> (sapplys s cs'))"
 
-definition rer_star :: "system \<Rightarrow>subst_msg \<Rightarrow> system \<Rightarrow> bool" ("(_)/\<leadsto>*[_]/ _ " [73,73,73]72) where
-"cs \<leadsto>*[s] cs' = ((cs, cs') \<in> (rtrancl { (x, y) . (x \<leadsto>[s] y) }))"
+inductive rer_star :: "system \<Rightarrow> subst_msg \<Rightarrow> system \<Rightarrow> bool" ("(_)/\<leadsto>*[_]/ _ " [73,73,73]72) where
+rer_star_id: "cs \<leadsto>*[Variable] cs"
+| rer_star_step: "cs \<leadsto>[s] cs'' \<Longrightarrow> cs'' \<leadsto>*[t] cs' \<Longrightarrow> cs \<leadsto>*[scomp_msg t s] cs'"
 
 (* (d) *)
 inductive simplec:: "constraint \<Rightarrow> bool" where
