@@ -128,8 +128,8 @@ rer1_unify: "(\<And> z. t\<noteq>Variable z) \<Longrightarrow> u \<in> set m \<u
 | rer1_adec: "x=Pub_encrypt u (Const ''intruder'') \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
  [ ((u#head@tail) | (x#m) } t) ]"
 | rer1_ksub: "Pub_encrypt u (Variable agent) \<in> set a \<Longrightarrow>
-s=(Variable (v:=Const ''intruder'')) \<Longrightarrow>
-a | m } t  \<leadsto>1[s] [ sapplyc s (a|m}t) ]"
+s=(Variable (agent:=Const ''intruder'')) \<Longrightarrow>
+a|m}t  \<leadsto>1[s] [ sapplyc s (a|m}t) ]"
 
 inductive rer :: "system \<Rightarrow> subst_msg \<Rightarrow> system \<Rightarrow> bool " ("(_)/\<leadsto>[_]/ _ " [73,73,73]72) where
 "c \<leadsto>1[s] cs \<Longrightarrow> (head@c#tail) \<leadsto>[s] (cs @ (sapplys s (head@tail)))"
@@ -180,21 +180,6 @@ assume nvar:"\<And>z. t \<noteq> Variable z" and app:"u \<in> set m \<union> set
   then have "solved (sapplyc ?target (a|m}t))" by(simp add:sapplyc_def)
   then show "?target \<in> sol [a|m} t ]" by(auto intro:solI)
 qed
-next
-case (rer1_comp_hash a m t)
-  then show ?case sorry
-next
-  case (rer1_comp_concat a m t u)
-  then show ?case sorry
-next
-  case (rer1_comp_sym_encrypt a m t u)
-  then show ?case sorry
-next
-  case (rer1_comp_pub_encrypt a m t u)
-  then show ?case sorry
-next
-  case (rer1_comp_sign a m t)
-  then show ?case sorry
 next
   case (rer1_proj x u u' head tail m t)
   show ?case
@@ -269,8 +254,14 @@ next
   qed
 next
   case (rer1_ksub u agent a s m t)
-  then show ?case sorry
-qed
+  then have "v \<in> sol (sapplys s [(a|m} t )])" by(simp add:sapplys_def)
+  then show ?case by(rule sol_scomp)
+qed(auto simp add:sapplyc_def sapplyl_def sapply_msg_simps elim!:solE solvedE
+intro!:solI solvedI deduce_comp_hash deduce_comp_sign deduce_comp_concat
+deduce_comp_pub_encrypt deduce_comp_sym_encrypt)
+
+
+
 
 
 end
