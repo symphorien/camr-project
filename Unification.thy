@@ -654,7 +654,7 @@ lemma 3:
     and sdom_fv: "sdom \<sigma> \<subseteq> fv_eqs l"
     and svran_fv: "svran \<sigma> \<subseteq> fv_eqs l"
     and sdom_svran_disj: "sdom \<sigma> \<inter> svran \<sigma> = {}"
-  oops
+  sorry
 
 
 (*********************************** definitions ***************************)
@@ -728,5 +728,5 @@ lemma wf_subst_scomp: "\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> 
 
 lemma wf_subst_unify: "\<lbrakk> unify l = Some \<sigma>; wf_eqs arity l \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
   apply (induction l)
-  oops
+  sorry
 end
