@@ -128,7 +128,7 @@ rer1_unify: "(\<And> z. t\<noteq>Variable z) \<Longrightarrow> u \<in> set m \<u
 | rer1_adec: "x=Pub_encrypt u (Const ''intruder'') \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
  [ ((u#head@tail) | (x#m) } t) ]"
 | rer1_ksub: "Pub_encrypt u (Variable agent) \<in> set a \<Longrightarrow>
-s=(%v. Variable (if v=agent then ''intruder'' else v)) \<Longrightarrow>
+s=(Variable (v:=Const ''intruder'')) \<Longrightarrow>
 a | m } t  \<leadsto>1[s] [ sapplyc s (a|m}t) ]"
 
 inductive rer :: "system \<Rightarrow> subst_msg \<Rightarrow> system \<Rightarrow> bool " ("(_)/\<leadsto>[_]/ _ " [73,73,73]72) where
