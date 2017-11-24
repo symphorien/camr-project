@@ -260,8 +260,18 @@ qed(auto simp add:sapplyc_def sapplyl_def sapply_msg_simps elim!:solE solvedE
 intro!:solI solvedI deduce_comp_hash deduce_comp_sign deduce_comp_concat
 deduce_comp_pub_encrypt deduce_comp_sym_encrypt)
 
+lemma sol_rer: "cs \<leadsto>[s] cs' \<Longrightarrow> t \<in> sol(cs') \<Longrightarrow> (scomp_msg t s) \<in> sol cs"
+proof(induction cs s cs' arbitrary: t rule:rer.induct)
+  case hyp:(1 c s cs head tail)
+  then have "t \<in> sol cs" by(simp add:sol_concat)
+  from `c\<leadsto>1[s] cs` and this have half:"scomp_msg t s \<in> sol [c]" by(rule sol_rer1)
 
+  from hyp have "t \<in> sol (sapplys s (head@tail))" by(simp add:sol_concat)
+  then have half2:"scomp_msg t s \<in> sol (head@tail)" by(auto simp add:sol_scomp)
 
-
+  have "sol (head @ c # tail) = sol head \<inter> sol [c] \<inter> sol tail" 
+    by(simp add:sol_concat[symmetric, of "[c]" tail] sol_concat[symmetric])
+  from this and half and half2 show ?case by(simp add:sol_concat)
+qed
 
 end
