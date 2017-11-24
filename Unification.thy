@@ -72,7 +72,6 @@ proof (induction b)
   then show ?case by simp
 next
   case (Fun f xs)
-  assume "?x2a \<in> set xs \<Longrightarrow> x \<in> fv ?x2a \<Longrightarrow> ?x2a \<noteq> Var x \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> ?x2a)"
   have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>x \<in> fv (Fun f xs)\<close> by simp
   then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
   then show ?case 
@@ -250,6 +249,8 @@ fun fv_eq :: "('f, 'v) equation \<Rightarrow> 'v set" where
 fun fv_eqs :: "('f, 'v) equations \<Rightarrow> 'v set" where
   "fv_eqs l = (\<Union>x \<in> set l. fv_eq x)"
 
+print_theorems
+
 fun sapply_eq :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equation \<Rightarrow> ('f, 'v) equation" where
   "sapply_eq \<sigma> (a,b) = (sapply \<sigma> a, sapply \<sigma> b)"
 
@@ -291,7 +292,7 @@ lemma unifiess_empty: "unifiess \<sigma> []"
 lemma unifiess_list: "\<lbrakk> unifies \<sigma> x; unifiess \<sigma> xs \<rbrakk> \<Longrightarrow> unifiess \<sigma> (x # xs)"
   by (auto simp add: unifies.intros unifiess_def)
 
-lemma helper: "\<lbrakk> length l1 = length l2; (\<And>a b. (a,b) \<in> set (zip l1 l2) \<Longrightarrow> unifies \<sigma> (a,b)) \<rbrakk> \<Longrightarrow> unifiess \<sigma> (zip l1 l2)"
+lemma unifies_zip: "\<lbrakk> length l1 = length l2; (\<And>a b. (a,b) \<in> set (zip l1 l2) \<Longrightarrow> unifies \<sigma> (a,b)) \<rbrakk> \<Longrightarrow> unifiess \<sigma> (zip l1 l2)"
   apply (induction "zip l1 l2")
   by (auto simp add: unifiess_def)
 
@@ -322,42 +323,55 @@ proof (rule notI)
     then have "fv (\<sigma> x) \<subseteq> fv (\<sigma> \<cdot> b)" by auto
     then show ?thesis sorry 
   qed
+qed
 
-(* \<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> size (Var x) < size b *)
-
-lemma "\<lbrakk> \<forall>(a,b) \<in> set (zip l1 l2). f a = f b; length l1 = length l2 \<rbrakk> \<Longrightarrow> map f l1 = map f l2"
-proof (induction "zip l1 l2")
-  case Nil
-  assume "\<forall>(a, b)\<in>set (zip l1 l2). f a = f b" 
-     and "length l1 = length l2"
-  have "length (zip l1 l2) = 0" using \<open>[] = zip l1 l2\<close> by simp
-  then have "length l1 = 0" "length l2 = 0" using \<open>length l1 = length l2\<close> by (auto) 
-  then have "l1 = []" "l2 = []" by auto
-  then show ?case by simp
+lemma ex_unifier_fun: 
+  assumes "(\<exists>\<tau>. unifiess \<tau> ((Fun f l1, Fun g l2) # xs))"
+  shows "g = f"
+    and "length l2 = length l1"
+    and "\<exists>\<tau>. unifiess \<tau> (xs @ zip l1 l2)"
+proof -
+  obtain \<tau> where "unifiess \<tau> ((Fun f l1, Fun g l2) # xs)" using assms by auto
+  then have "unifies \<tau> (Fun f l1, Fun g l2)" by (simp add: unifiess_def)
+  then have "Fun f (map (sapply \<tau>) l1) = Fun g (map (sapply \<tau>) l2)" by (auto simp add: unifies.simps)
+  then show "g = f" by simp
 next
-  case (Cons a xs)
-  then have "zip l1 l2 = a # xs" by simp
-  then have "hd (zip l1 l2) = a" by (simp add: hd_def)
-  have "xs = tl (zip l1 l2)" using \<open>zip l1 l2 = a # xs\<close> by simp
-  then show ?case oops
+
+    
 
 
-lemma "\<lbrakk> length l1 = length l2 \<rbrakk> \<Longrightarrow> unifiess \<sigma> (zip l1 l2) \<longleftrightarrow> unifies \<sigma> (Fun f l1, Fun f l2)"
+lemma length_zip: "\<lbrakk> length l1 = length l2 \<rbrakk> \<Longrightarrow> (\<forall>(a,b) \<in> set (zip l1 l2). f a = f b) \<longleftrightarrow> map f l1 = map f l2"
+proof (induction l1 l2 rule: list_induct2)
+  case Nil
+  then show ?case by auto
+next
+  case (Cons x xs y ys)
+  then show ?case by auto
+qed
+
+
+lemma unify_zip_fun: "\<lbrakk> length l1 = length l2 \<rbrakk> \<Longrightarrow> unifiess \<sigma> (zip l1 l2) \<longleftrightarrow> unifies \<sigma> (Fun f l1, Fun f l2)"
 proof (rule iffI)
   assume "length l1 = length l2"
      and "unifiess \<sigma> (zip l1 l2)"
   then have "\<forall>(a,b) \<in> set (zip l1 l2). \<sigma> \<cdot> a = \<sigma> \<cdot> b" by (auto simp add: unifiess_def unifies.simps)
-  (*then have "\<forall>(a,b) \<in> set (zip (map (sapply \<sigma>) l1) (map (sapply \<sigma>) l2)). a = b"*) 
-  then have "map (sapply \<sigma>) l1 = map (sapply \<sigma>) l2" using \<open>length l1 = length l2\<close> list_eq_iff_zip_eq[of "map (sapply \<sigma>) l1" "map (sapply \<sigma>) l2"] sorry
-  then show  "unifies \<sigma> (Fun f l1, Fun f l2)" oops
+  then have "map (sapply \<sigma>) l1 = map (sapply \<sigma>) l2" using \<open>length l1 = length l2\<close> by (simp add: length_zip)
+  then have "\<sigma> \<cdot> (Fun f l1) = \<sigma> \<cdot> (Fun f l2)" by auto
+  then show  "unifies \<sigma> (Fun f l1, Fun f l2)" using unifies.intros by blast
 next
-  show "unifiess \<sigma> (zip l1 l2)" oops
+  assume "length l1 = length l2"
+     and "unifies \<sigma> (Fun f l1, Fun f l2)"
+  then have "\<sigma> \<cdot> (Fun f l1) = \<sigma> \<cdot> (Fun f l2)" by (auto simp add: unifies.simps)
+  then have "map (sapply \<sigma>) l1 = map (sapply \<sigma>) l2" by auto
+  then have "\<forall>(a,b) \<in> set (zip l1 l2). \<sigma> \<cdot> a = \<sigma> \<cdot> b" using \<open>length l1 = length l2\<close> by (simp add: length_zip)
+  then show "unifiess \<sigma> (zip l1 l2)" using \<open>length l1 = length l2\<close> unifies_zip unifies.intros by fastforce
+qed
 
 fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
   "is_mgu \<sigma> l \<longleftrightarrow> (unifiess \<sigma> l \<and> (\<forall> \<tau>. unifiess \<tau> l \<longrightarrow> (\<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>)))"
 
 fun measure2 :: "('f, 'v) equations \<Rightarrow> nat" where
-  "measure2 (x # xs) = size x + measure2 xs"
+  "measure2 (x # xs) = size (fst x) + measure2 xs"
 | "measure2 [] = 0"
 
 fun scomp_opt :: "('f, 'v) subst option \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst option" where
@@ -381,7 +395,7 @@ termination
   (\<lambda>U. card (fv_eqs U)), 
   (\<lambda>U. measure2 U), 
   (\<lambda>U. length U)]")
-       apply (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm)
+       apply (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm) []
   sorry
 
 print_theorems
@@ -426,102 +440,124 @@ qed
 lemma unify_notin_fv: "\<lbrakk> x \<notin> fv t \<rbrakk> \<Longrightarrow> unifiess \<sigma> (sapply_eqs (Var (x := t)) xs) \<longleftrightarrow> unifiess (\<sigma> \<circ>s (Var (x := t))) ((Var x, t) # xs)"
   by (auto simp add: unifiess_def unifies_scomp_fst unifies_triv)
 
-
-
+lemma unify_notin_fv_spec:
+  assumes "x \<notin> fv t"
+      and "unifiess \<sigma> ((Var x, t) # xs)"
+    shows "unifiess \<sigma> (sapply_eqs (Var (x := t)) xs)"
+proof -
+  have "unifies \<sigma> (Var x, t)" using assms by (simp add: unifiess_def) 
+  then have "\<sigma> x = \<sigma> \<cdot> t" by (simp add: unifies.simps)
+  have "unifiess \<sigma> xs" using assms by (simp add: unifiess_def)
+  then have "\<forall>(a,b) \<in> set xs. unifies \<sigma> (a,b)" by (auto simp add: unifiess_def)
+  then have "\<forall>(a,b) \<in> set xs. \<sigma> \<cdot> a = \<sigma> \<cdot> b" by (auto simp add: unifies.simps)
+  then have "\<forall>(a,b) \<in> set (sapply_eqs (Var (x := t)) xs). "
 
 
 lemma unify_return: "unify l = Some \<sigma> \<Longrightarrow> unifiess \<sigma> l"
-proof (induction l rule: unify.induct)
+proof (induction l arbitrary: \<sigma> rule: unify.induct)
   case 1
   then show ?case by (simp only: unifiess_empty)
 next
-  case (2 x b xs)
+  case Var_Var: (2 x b xs)
   then show ?case
   proof (cases "b = Var x")
-    case True
-    assume "b = Var x \<Longrightarrow> unify xs = Some \<sigma> \<Longrightarrow> unifiess \<sigma> xs" and "unify ((Var x, b) # xs) = Some \<sigma>"
-    then have 1: "unify xs = Some \<sigma> \<Longrightarrow> unifiess \<sigma> xs" using \<open>b = Var x\<close> by blast
+    case True 
+    then have 1: "unify xs = Some \<sigma> \<Longrightarrow> unifiess \<sigma> xs" using \<open>b = Var x\<close> using Var_Var by blast
     have "unify ((Var x, b) # xs) = unify xs" using \<open>b = Var x\<close> by simp
     then have "unify xs = Some \<sigma>" using \<open>unify ((Var x, b) # xs) = Some \<sigma>\<close> by simp
     then have "unifiess \<sigma> xs" using 1 by blast
     then show ?thesis using \<open>b = Var x\<close> by (simp add: unifiess_list unifies.intros)
-  next
+  next 
     case False
-    assume "b \<noteq> Var x \<Longrightarrow> x \<notin> fv b \<Longrightarrow> unify (sapply_eqs (Var(x := b)) xs) = Some \<sigma> \<Longrightarrow> unifiess \<sigma> (sapply_eqs (Var(x := b)) xs)"
-       and "unify ((Var x, b) # xs) = Some \<sigma>"
     then show ?thesis
     proof (cases "x \<in> fv b")
       case True 
-      assume 1: "unify ((Var x, b) # xs) = Some \<sigma>"
       have "unify ((Var x, b) # xs) = None" using \<open>b \<noteq> Var x\<close> \<open>x \<in> fv b\<close> by simp
-      then have False using 1 by simp
+      then have False using Var_Var by simp
       then show ?thesis by blast
     next
       case False
       let ?term = "sapply_eqs (Var(x := b)) xs"
-      assume "b \<noteq> Var x \<Longrightarrow> x \<notin> fv b \<Longrightarrow> unify ?term = Some \<sigma> \<Longrightarrow> unifiess \<sigma> ?term"
-         and 2: "unify ((Var x, b) # xs) = Some \<sigma>"
-      then have 3: "unify ?term = Some \<sigma> \<Longrightarrow> unifiess \<sigma> ?term" using \<open>x \<notin> fv b\<close> \<open>b \<noteq> Var x\<close> by simp
+      have 3: "unify ?term = Some \<sigma> \<Longrightarrow> unifiess \<sigma> ?term" using Var_Var \<open>x \<notin> fv b\<close> \<open>b \<noteq> Var x\<close> by simp
       have "unify ((Var x, b) # xs) =  scomp_opt (unify ?term) (Var (x := b))" using \<open>b \<noteq> Var x\<close> \<open>x \<notin> fv b\<close> by simp
-      then have "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using 2 by simp
+      then have "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using Var_Var by simp
       then obtain \<tau> where 4: "unify ?term = Some \<tau>" by (auto dest: scomp_some)
       have "(\<tau> \<circ>s (Var (x := b))) \<cdot> (Var x) = \<tau> \<cdot> b" by (simp)
       also have "... = (\<tau> \<circ>s (Var (x := b))) \<cdot> b" using \<open>x \<notin> fv b\<close> by (simp add: sapply_notin_fv)
-      have "unifiess \<tau> ?term" using 3 4 sorry
-      then show ?thesis sorry
+      have "unifiess \<tau> ?term" using 3 4 False Var_Var.IH(2) by force
+      then show ?thesis using Var_Var "4" False \<open>scomp_opt (unify (sapply_eqs (Var(x := b)) xs)) (Var(x := b)) = Some \<sigma>\<close> unify_notin_fv by fastforce 
     qed
   qed
 next
   case (3 v va x xs)
-  assume 5: "unify ((Var x, Fun v va) # xs) = Some \<sigma> \<Longrightarrow> unifiess \<sigma> ((Var x, Fun v va) # xs)"
-     and 6: "unify ((Fun v va, Var x) # xs) = Some \<sigma>"
   have "unify ((Fun v va, Var x) # xs) = unify ((Var x, Fun v va) # xs)" by simp
-  then have "unify ((Var x, Fun v va) # xs) = Some \<sigma>" using 6 by simp
-  then have 7: "unifiess \<sigma> ((Var x, Fun v va) # xs)" using 5 by simp
+  then have "unify ((Var x, Fun v va) # xs) = Some \<sigma>" using 3 by simp
+  then have 7: "unifiess \<sigma> ((Var x, Fun v va) # xs)" using 3 by simp
   then have "unifies \<sigma> (Fun v va, Var x)" by (simp add: unifies.intros unifies.simps unifiess_def)
   then show ?case using 7 by (auto simp add: unifiess_def) 
 next
   case (4 f l1 g l2 xs)
-  assume 8: "g = f \<Longrightarrow> length l2 = length l1 \<Longrightarrow> unify (xs @ zip l1 l2) = Some \<sigma> \<Longrightarrow> unifiess \<sigma> (xs @ zip l1 l2)" 
-     and 9: "unify ((Fun f l1, Fun g l2) # xs) = Some \<sigma>"
-  have 10: "g = f" "length l2 = length l1" "unify (xs @ zip l1 l2) = Some \<sigma>" using 9 by (simp_all split: if_splits)
-  then have "unifiess \<sigma> (xs @ zip l1 l2)" using 8 by blast
+  have 10: "g = f" "length l2 = length l1" "unify (xs @ zip l1 l2) = Some \<sigma>" using 4 by (simp_all split: if_splits)
+  then have "length l1 = length l2" using 4 by simp
+  have "unifiess \<sigma> (xs @ zip l1 l2)" using 4 10 by blast
   then have "unifiess \<sigma> xs" "unifiess \<sigma> (zip l1 l2)" by (auto simp add: unifiess_def)
-  then have "\<forall>(a,b) \<in> set (zip l1 l2). unifies \<sigma> (a,b)" by (simp add: unifiess_def)
-  then have "\<forall>(a,b) \<in> set (zip l1 l2). \<sigma> \<cdot> a = \<sigma> \<cdot> b" by (simp add: unifies.simps)
-  then have "\<sigma> \<cdot> (Fun f l1) = \<sigma> \<cdot> (Fun g l2)" using 10 by (auto intro: unifiess_def)
-  then have "unifies \<sigma> (Fun f l1, Fun g l2)" using 10 by simp
-  then show ?case by (auto simp add: unifiess_list unifiess_def)
+  then have "unifies \<sigma> (Fun f l1, Fun g l2)" using \<open>unifiess \<sigma> (zip l1 l2)\<close> unify_zip_fun[OF \<open>length l1 = length l2\<close>] using "10"(1) by blast
+  then show ?case using \<open>unifiess \<sigma> xs\<close> by (auto simp add: unifiess_list unifiess_def)
 qed
 
+
+
+
 lemma unify_mgu: "\<lbrakk>unify l = Some \<sigma>; unifiess \<tau> l\<rbrakk> \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
-proof (induction l rule: unify.induct)
+proof (induction l arbitrary: \<sigma> rule: unify.induct)
   case 1
   have "unify [] = Some Var" by simp
   then have "\<sigma> = Var" using \<open>unify [] = Some \<sigma>\<close> by simp
   then have "\<tau> = \<tau> \<circ>s \<sigma>" by simp
   then show ?case by (rule exI[where ?x = \<tau>])
 next
-case (2 x b xs)
-  then show ?case sorry
+  case (2 x b xs)
+  then show ?case
+  proof (cases "b = Var x")
+    case b_var: True
+    then have "unify ((Var x, b) # xs) = unify xs" by simp
+    then have "unify xs = Some \<sigma>" using 2 by simp
+    moreover have "unifiess \<tau> xs" using 2 by (simp add: unifiess_def)
+    ultimately have "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>" using \<open>b = Var x\<close> 2 by blast
+    then show ?thesis .
+  next
+    case b_fun: False
+    then show ?thesis 
+    proof (cases "x \<in> fv b")
+      case True
+      then have "unify ((Var x, b) # xs) = None" using b_fun by simp
+      moreover have "unify ((Var x, b) # xs) = Some \<sigma>" using 2 by simp
+      ultimately have False by simp
+      then show ?thesis by simp
+    next
+      let ?term = "sapply_eqs (Var(x := b)) xs" 
+      case x_free: False
+      have "unify ((Var x, b) # xs) = scomp_opt (unify ?term) (Var (x := b))" using x_free b_fun by simp
+      then have "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using 2 by simp
+      then have "\<exists>\<tau>. unify ?term = Some \<tau>" by (auto simp add: scomp_some)
+      then obtain \<sigma> where "unify ?term = Some \<sigma>" by blast
+      then show ?thesis sorry
+    qed
+  qed
 next
   case (3 v va x xs)
-  assume 1: "unify ((Var x, Fun v va) # xs) = Some \<sigma> \<Longrightarrow> unifiess \<tau> ((Var x, Fun v va) # xs) \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
-     and 2: "unify ((Fun v va, Var x) # xs) = Some \<sigma>"
-     and "unifiess \<tau> ((Fun v va, Var x) # xs)"
   then have "unifiess \<tau> ((Var x, Fun v va) # xs)" by (simp add: unifiess_def unifies.simps)
-  moreover have "unify ((Var x, Fun v va) # xs) = Some \<sigma>" using 2 by simp
-  ultimately have "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>" using 1 by simp
+  moreover have "unify ((Var x, Fun v va) # xs) = Some \<sigma>" using 3 by simp
+  ultimately have "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>" using 3 by blast
 then show ?case .
 next
-  case (4 f l1 g l2 xs)
-  assume "g = f \<Longrightarrow> length l2 = length l1 \<Longrightarrow> unify (xs @ zip l1 l2) = Some \<sigma> \<Longrightarrow> unifiess \<tau> (xs @ zip l1 l2) \<Longrightarrow> \<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
-     and "unify ((Fun f l1, Fun g l2) # xs) = Some \<sigma>"
-     and 3: "unifiess \<tau> ((Fun f l1, Fun g l2) # xs)"
-  then have "f = g" "length l1 = length l2" "unify (xs @ zip l1 l2) = Some \<sigma>" by (simp_all split: if_splits)
-  have "unifiess \<tau> xs" "unifies \<tau> (Fun f l1, Fun g l2)" using 3 by (auto simp add: unifiess_def)
-  have "unifiess \<tau> (xs @ zip l1 l2)" using 3 by simp
-  then show ?case sorry
+  case Fun_Case: (4 f l1 g l2 xs)
+  then have 5: "f = g" "length l1 = length l2" "unify (xs @ zip l1 l2) = Some \<sigma>" by (simp_all split: if_splits)
+  have "unifiess \<tau> xs" "unifies \<tau> (Fun f l1, Fun g l2)" using Fun_Case by (auto simp add: unifiess_def)
+  then have "unifiess \<tau> (zip l1 l2)" using Fun_Case unify_zip_fun[OF \<open>length l1 = length l2\<close>] \<open>f = g\<close> by blast
+  then have "unifiess \<tau> (xs @ zip l1 l2)" using \<open>unifiess \<tau> xs\<close> by (auto simp add: unifiess_def)
+  then have "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>" using Fun_Case 5 by (simp add: Fun_Case.IH) 
+  then show ?case .
 qed
 
 
@@ -552,8 +588,17 @@ case (2 x b xs)
     then show ?thesis sorry
   qed
 next
-case (3 v va x xs)
-then show ?case sorry
+  case (3 v va x xs)
+  assume 2: "\<exists>\<tau>. unifiess \<tau> ((Var x, Fun v va) # xs) \<Longrightarrow> \<exists>\<sigma>. unify ((Var x, Fun v va) # xs) = Some \<sigma>"
+     and "\<exists>\<tau>. unifiess \<tau> ((Fun v va, Var x) # xs)"
+  then obtain \<tau> where "unifiess \<tau> ((Fun v va, Var x) # xs)" by blast
+  then have "unifiess \<tau> xs" "unifies \<tau> (Fun v va, Var x)" by (auto simp add: unifiess_def)
+  then have "\<tau> \<cdot> (Var x) = \<tau> \<cdot> (Fun v va)" by (auto simp add: unifies.simps)
+  then have "unifies \<tau> (Var x, Fun v va)" by (auto simp add: unifies.intros)
+  then have "unifiess \<tau> ((Var x, Fun v va) # xs)" using \<open>unifiess \<tau> xs\<close> by (auto simp add: unifiess_def)
+  then have "\<exists>\<sigma>. unify ((Var x, Fun v va) # xs) = Some \<sigma>" using 2 by blast
+  moreover have "unify ((Fun v va, Var x) # xs) = unify ((Var x, Fun v va) # xs)" by simp
+  ultimately show ?case by simp
 next
   case (4 f l1 g l2 xs)
   then show ?case sorry
