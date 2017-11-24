@@ -25,83 +25,86 @@ print_theorems
 definition scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> ('f, 'v) subst" (infixl "\<circ>s" 75) where
   "scomp \<sigma> \<tau> = (\<lambda>x. \<sigma> \<cdot> (\<tau> x))"
 
-definition msize :: "('f, 'v) term \<Rightarrow> nat" where
-  "msize x = size_term (\<lambda>x. 0) (\<lambda>x. 0) x" 
+
+(********************************* size argument ****************************)
+
+fun msize :: "('f, 'v) term \<Rightarrow> nat" where
+  "msize (Var x) = 1"
+| "msize (Fun f xs) = 1 + sum_list (map msize xs)"
+
+print_theorems
+
+inductive ssube :: "('f, 'v) term \<Rightarrow> ('f, 'v) term \<Rightarrow> bool" where
+  "\<lbrakk> x \<in> set xs \<or> (\<exists>y \<in> set xs. ssube x y) \<rbrakk> \<Longrightarrow> ssube x (Fun f xs)"
+
+print_theorems
 
 
-(******************************** lemmata **********************************) 
+lemma ssube_size: "ssube e1 e2 \<Longrightarrow> msize e1 < msize e2"
+proof (induction e1 e2 rule: ssube.induct)
+  case (1 x xs f)
+  then show ?case 
+  proof (rule disjE)
+    assume "x \<in> set xs"
+    then have "msize x \<in> set (map msize xs)" by auto
+    then have 2: "msize x \<le> sum_list (map msize xs)" by (auto simp add: member_le_sum_list)
+    have "msize (Fun f xs) = 1 + sum_list (map msize xs)" by simp
+    then show "msize x < msize (Fun f xs)" using 2 by auto
+  next
+    assume "\<exists>y\<in>set xs. ssube x y \<and> msize x < msize y"
+    then obtain y where 3: "y \<in> set xs \<and> ssube x y \<and> msize x < msize y" by blast
+    then have "msize y \<in> set (map msize xs)" by auto
+    then have 4: "msize y \<le> sum_list (map msize xs)" by (auto simp add: member_le_sum_list)
+    have "msize (Fun f xs) = 1 + sum_list (map msize xs)" by simp
+    then show "msize x < msize (Fun f xs)" using 3 4 by auto
+  qed
+qed
 
 lemma msize_term_diff: "\<lbrakk> msize a \<noteq> msize b \<rbrakk> \<Longrightarrow> a \<noteq> b"
   apply (rule notI)
-  by (auto simp add: msize_def)
+  by (auto)
 
 lemma msize_gt_zero: "msize x > 0"
   apply (cases x)
-  by (auto simp add: msize_def)
+  by (auto)
+
+lemma ssube_subst_stable: "ssube e1 e2 \<Longrightarrow> ssube (\<sigma> \<cdot> e1) (\<sigma> \<cdot> e2)"
+proof (induction e1 e2 rule: ssube.induct)
+  case (1 x xs f)
+  then show ?case
+  proof (rule disjE)
+    assume "x \<in> set xs"
+    then have "\<sigma> \<cdot> x \<in> set (map (sapply \<sigma>) xs)" by auto
+    then have "ssube (\<sigma> \<cdot> x) (Fun f (map (sapply \<sigma>) xs))" by (auto intro: ssube.intros)
+    then show ?thesis by simp
+  next
+    assume "\<exists>y\<in>set xs. ssube x y \<and> ssube (\<sigma> \<cdot> x) (\<sigma> \<cdot> y)" 
+    then obtain y where 2: "y \<in> set xs \<and> ssube x y \<and> ssube (\<sigma> \<cdot> x) (\<sigma> \<cdot> y)" by blast
+    then have "\<sigma> \<cdot> y \<in> set (map (sapply \<sigma>) xs)" by auto
+    then show ?thesis using 2 by (auto intro: ssube.intros)
+  qed
+qed
+
+lemma fv_ssube: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> (ssube (Var x) b)"
+  by (induction b) (auto intro: ssube.intros)
 
 lemma fv_msize_diff: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> msize (Var x) < msize b"
-proof (cases b)
-  assume "x \<in> fv b" and "b \<noteq> Var x"
-  case (Var x1)
-  then have "x = x1" using \<open>x \<in> fv b\<close> by (auto intro: fv.simps)
-  then have "b = Var x" using \<open>b = Var x1\<close> by simp
-  then have False using \<open>b \<noteq> Var x\<close> by simp
-  then show ?thesis by simp
-next
-  case (Fun f xs)
-  assume "x \<in> fv b" and "b \<noteq> Var x"
-  have "msize (Var x) = 1" by (simp add: msize_def)
-  have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>b = Fun f xs\<close> \<open>x \<in> fv b\<close> by simp
-  then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
-  have "0 < msize y" by (auto simp add: msize_gt_zero)
-  then have "0 < size_list msize xs" using \<open>y \<in> set xs\<close> by (simp add: size_list_estimation)
-  then have "size_list msize xs \<ge> 1" by simp
-  moreover have "msize = (size_term (\<lambda>x. 0) (\<lambda>x. 0))" using msize_def by auto
-  ultimately have "size_list (size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs \<ge> 1" by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
-  moreover have "msize b = (\<lambda>x. 0) f + size_list(size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs + 1" using \<open>b = Fun f xs\<close> by (auto simp add: msize_def) 
-  ultimately have "msize b \<ge> 2" by simp
-  then show ?thesis using \<open>msize (Var x) = 1\<close> by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
+proof -
+  assume 1: "x \<in> fv b" "b \<noteq> Var x"
+  then have "ssube (Var x) b" by (simp add: fv_ssube)
+  then show ?thesis using ssube_size by fastforce
 qed
 
 lemma fv_msize_sapply_diff: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> b)"
-proof (induction b)
-  case (Var x)
-  then have "Var x \<noteq> Var x" by simp
-  moreover have "Var x = Var x" by simp
-  ultimately have False using \<open>Var x \<noteq> Var x\<close> by simp
-  then show ?case by simp
-next
-  case (Fun f xs)
-  have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>x \<in> fv (Fun f xs)\<close> by simp
-  then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
-  then show ?case 
-  proof (cases "y = Var x")
-    case True
-    then show ?thesis sorry
-  next
-    case False
-    assume "y \<in> set xs \<Longrightarrow> x \<in> fv y \<Longrightarrow> y \<noteq> Var x \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> y)"
-    then have "msize (\<sigma> x) < msize (\<sigma> \<cdot> y)" using \<open>?x2a \<in> set xs \<Longrightarrow> x \<in> fv ?x2a \<Longrightarrow> ?x2a \<noteq> Var x \<Longrightarrow> msize (\<sigma> x) < msize (\<sigma> \<cdot> ?x2a)\<close>[of y] by simp
-    then show ?thesis sorry
-  qed
-qed
-  
-next
-  case (Fun f xs)
+proof -
   assume "x \<in> fv b" and "b \<noteq> Var x"
-  have "msize (Var x) = 1" by (simp add: msize_def)
-  have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>b = Fun f xs\<close> \<open>x \<in> fv b\<close> by simp
-  then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
-  have "0 < msize y" by (auto simp add: msize_gt_zero)
-  then have "0 < size_list msize xs" using \<open>y \<in> set xs\<close> by (simp add: size_list_estimation)
-  then have "size_list msize xs \<ge> 1" by simp
-  moreover have "msize = (size_term (\<lambda>x. 0) (\<lambda>x. 0))" using msize_def by auto
-  ultimately have "size_list (size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs \<ge> 1" by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
-  moreover have "msize b = (\<lambda>x. 0) f + size_list(size_term (\<lambda>x. 0) (\<lambda>x. 0)) xs + 1" using \<open>b = Fun f xs\<close> by (auto simp add: msize_def) 
-  ultimately have "msize b \<ge> 2" by simp
-  then show ?thesis using \<open>msize (Var x) = 1\<close> by (simp add: \<open>Unification.msize = size_term (\<lambda>x. 0) (\<lambda>x. 0)\<close>)
+  then have "ssube (Var x) b" by (simp add: fv_ssube)
+  then have "ssube (\<sigma> x) (\<sigma> \<cdot> b)" using ssube_subst_stable by fastforce
+  then show ?thesis using ssube_size by fastforce
 qed
 
+
+(******************************** lemmata **********************************) 
 
 lemma fv_sapply: "fv (\<sigma> \<cdot> t) = (\<Union>x \<in> fv t. fv (\<sigma> x))"
   apply (induction t rule: fv.induct)
@@ -299,9 +302,9 @@ lemma unifies_zip: "\<lbrakk> length l1 = length l2; (\<And>a b. (a,b) \<in> set
 
 lemma in_fv_not_unifies: "\<lbrakk> x \<in> fv b; b \<noteq> Var x \<rbrakk> \<Longrightarrow> \<not>(\<exists>\<sigma>. unifies \<sigma> (Var x, b))"
 proof (rule notI)
-  assume "x \<in> fv b"
-     and "b \<noteq> Var x"
-     and "\<exists>\<sigma>. unifies \<sigma> (Var x, b)"
+  assume 1: "x \<in> fv b"
+     and 2: "b \<noteq> Var x"
+     and 3: "\<exists>\<sigma>. unifies \<sigma> (Var x, b)"
   then obtain \<sigma> where "unifies \<sigma> (Var x, b)" by blast
   then have "\<sigma> x = \<sigma> \<cdot> b" by (auto simp add: unifies.simps)
   then show "False"
@@ -313,32 +316,14 @@ proof (rule notI)
     then show ?thesis using \<open>b \<noteq> Var x\<close> by simp
   next
     case (Fun f xs)
-    have "x \<in> (\<Union>x \<in> (set xs). fv x)" using \<open>b = Fun f xs\<close> \<open>x \<in> fv b\<close> by simp
-    then obtain y where "y \<in> set xs" and "x \<in> fv y" by auto
-    then have "size_term (\<lambda>x. 1) (\<lambda>x. 0) y \<ge> 1" using by (auto)
-    then have "size_term (\<lambda>x. 1) (\<lambda>x. 0) (Fun f xs) \<ge> 2" by simp
-    then have "size_term (\<lambda>x. 1) (\<lambda>x. 0) (Var x) < size_term (\<lambda>x. 1) (\<lambda>x. 0) (Fun f xs)" by simp
-    then have "Var x \<noteq> b" by auto
-    then have "\<sigma> \<cdot> y \<in> set (map (sapply \<sigma>) xs)" by simp
-    then have "fv (\<sigma> x) \<subseteq> fv (\<sigma> \<cdot> b)" by auto
-    then show ?thesis sorry 
+    obtain \<sigma> where "unifies \<sigma> (Var x, b)" using 3 by blast
+    then have "\<sigma> x = \<sigma> \<cdot> b" by (simp add: unifies.simps)
+    have "msize (\<sigma> x) < msize (\<sigma> \<cdot> b)" using 1 2 by (simp add: fv_msize_sapply_diff)
+    then have "\<sigma> x \<noteq> \<sigma> \<cdot> b" by (simp add: msize_term_diff)
+    then have False using \<open>\<sigma> x = \<sigma> \<cdot> b\<close> by blast
+    then show ?thesis by simp
   qed
 qed
-
-lemma ex_unifier_fun: 
-  assumes "(\<exists>\<tau>. unifiess \<tau> ((Fun f l1, Fun g l2) # xs))"
-  shows "g = f"
-    and "length l2 = length l1"
-    and "\<exists>\<tau>. unifiess \<tau> (xs @ zip l1 l2)"
-proof -
-  obtain \<tau> where "unifiess \<tau> ((Fun f l1, Fun g l2) # xs)" using assms by auto
-  then have "unifies \<tau> (Fun f l1, Fun g l2)" by (simp add: unifiess_def)
-  then have "Fun f (map (sapply \<tau>) l1) = Fun g (map (sapply \<tau>) l2)" by (auto simp add: unifies.simps)
-  then show "g = f" by simp
-next
-
-    
-
 
 lemma length_zip: "\<lbrakk> length l1 = length l2 \<rbrakk> \<Longrightarrow> (\<forall>(a,b) \<in> set (zip l1 l2). f a = f b) \<longleftrightarrow> map f l1 = map f l2"
 proof (induction l1 l2 rule: list_induct2)
@@ -367,8 +352,34 @@ next
   then show "unifiess \<sigma> (zip l1 l2)" using \<open>length l1 = length l2\<close> unifies_zip unifies.intros by fastforce
 qed
 
+lemma ex_unifier_fun: 
+  assumes "(\<exists>\<tau>. unifiess \<tau> ((Fun f l1, Fun g l2) # xs))"
+  shows "f = g"
+    and "length l1 = length l2"
+    and "\<exists>\<tau>. unifiess \<tau> (xs @ zip l1 l2)"
+proof -
+  obtain \<tau> where "unifiess \<tau> ((Fun f l1, Fun g l2) # xs)" using assms by auto
+  then have "unifies \<tau> (Fun f l1, Fun g l2)" by (simp add: unifiess_def)
+  then have "Fun f (map (sapply \<tau>) l1) = Fun g (map (sapply \<tau>) l2)" by (auto simp add: unifies.simps)
+  then show "f = g" by simp
+next
+  obtain \<tau> where 3: "unifiess \<tau> ((Fun f l1, Fun g l2) # xs)" using assms by auto
+  then have 1: "unifies \<tau> (Fun f l1, Fun g l2)" by (simp add: unifiess_def)
+  then have "Fun f (map (sapply \<tau>) l1) = Fun g (map (sapply \<tau>) l2)" by (auto simp add: unifies.simps)
+  then have "map (sapply \<tau>) l1 = map (sapply \<tau>) l2" by simp
+  then show 2: "length l1 = length l2" using map_eq_imp_length_eq by blast
+  have "unifiess \<tau> (zip l1 l2)" using 1 2 unify_zip_fun[OF 2] \<open>Fun f (map (op \<cdot> \<tau>) l1) = Fun g (map (op \<cdot> \<tau>) l2)\<close> by blast
+  moreover have "unifiess \<tau> xs" using 3 by (auto simp add: unifiess_def)
+  ultimately have "unifiess \<tau> (xs @ zip l1 l2)" by (auto simp add: unifiess_def)
+  then show "\<exists>\<tau>. unifiess \<tau> (xs @ zip l1 l2)" by blast
+qed
+
+
 fun is_mgu :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> bool" where
   "is_mgu \<sigma> l \<longleftrightarrow> (unifiess \<sigma> l \<and> (\<forall> \<tau>. unifiess \<tau> l \<longrightarrow> (\<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>)))"
+
+
+(**** UNIFY ALGORITHM **** UNIFY ALGORITHM **** UNIFY ALGORITHM **** UNIFY ALGORITHM ****)
 
 fun measure2 :: "('f, 'v) equations \<Rightarrow> nat" where
   "measure2 (x # xs) = size (fst x) + measure2 xs"
@@ -453,6 +464,8 @@ proof -
   then have "\<forall>(a,b) \<in> set (sapply_eqs (Var (x := t)) xs). "
 
 
+(**** SOUNDNESS **** SOUNDNESS **** SOUNDNESS **** SOUNDNESS **** SOUNDNESS ****)
+
 lemma unify_return: "unify l = Some \<sigma> \<Longrightarrow> unifiess \<sigma> l"
 proof (induction l arbitrary: \<sigma> rule: unify.induct)
   case 1
@@ -506,8 +519,6 @@ next
 qed
 
 
-
-
 lemma unify_mgu: "\<lbrakk>unify l = Some \<sigma>; unifiess \<tau> l\<rbrakk> \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
 proof (induction l arbitrary: \<sigma> rule: unify.induct)
   case 1
@@ -541,7 +552,7 @@ next
       then have "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using 2 by simp
       then have "\<exists>\<tau>. unify ?term = Some \<tau>" by (auto simp add: scomp_some)
       then obtain \<sigma> where "unify ?term = Some \<sigma>" by blast
-      then show ?thesis sorry
+      then show ?thesis oops
     qed
   qed
 next
@@ -565,6 +576,9 @@ lemma unify_sound: "unify l = Some \<sigma> \<Longrightarrow> is_mgu \<sigma> l"
   by (auto simp add: unify_mgu unify_return)
 
 
+(**** COMPLETENESS **** COMPLETENESS **** COMPLETENESS **** COMPLETENESS ****)
+
+
 lemma unifier_exists_unify: "\<exists>\<tau>. unifiess \<tau> l \<Longrightarrow> \<exists>\<sigma>. unify l = Some \<sigma>"
 proof (induction l rule: unify.induct)
   case 1
@@ -585,7 +599,19 @@ case (2 x b xs)
     then show ?thesis using \<open>\<exists>\<sigma>. unify xs = Some \<sigma>\<close> by simp
   next
     case False
-    then show ?thesis sorry
+    then show ?thesis
+    proof (cases "x \<in> fv b")
+      case True
+      obtain \<tau> where "unifiess \<tau> ((Var x, b) # xs)" using 2 by blast
+      then have "unifies \<tau> (Var x, b)" by (simp add: unifiess_def)
+      then have "\<exists>\<tau>. unifies \<tau> (Var x, b)" by blast
+      moreover have "\<nexists>\<tau>. unifies \<tau> (Var x, b)" using \<open>x \<in> fv b\<close> \<open>b \<noteq> Var x\<close> by (simp add: in_fv_not_unifies)
+      ultimately have False by simp
+      then show ?thesis by simp
+    next
+      case False
+      then show ?thesis oops
+    qed
   qed
 next
   case (3 v va x xs)
@@ -601,7 +627,12 @@ next
   ultimately show ?case by simp
 next
   case (4 f l1 g l2 xs)
-  then show ?case sorry
+  then have 5: "f = g" "length l1 = length l2" "\<exists>\<tau>. unifiess \<tau> (xs @ zip l1 l2)" by (auto simp add: ex_unifier_fun)
+  then have "\<exists>\<sigma>. unify (xs @ zip l1 l2) = Some \<sigma>" using 4 by simp
+  then obtain \<sigma> where 6: "unify (xs @ zip l1 l2) = Some \<sigma>" by blast
+  have "unify ((Fun f l1, Fun g l2) # xs) = unify (xs @ (zip l1 l2))" using 5 by simp
+  then have "unify ((Fun f l1, Fun g l2) # xs) = Some \<sigma>" using 6 by simp 
+  then show ?case by blast
 qed
 
 lemma unify_complete: "\<exists> \<sigma>. unifiess \<sigma> l \<Longrightarrow> (\<exists>\<tau>. unify l = Some \<tau> \<and> unifiess \<tau> l)"
@@ -623,7 +654,7 @@ lemma 3:
     and sdom_fv: "sdom \<sigma> \<subseteq> fv_eqs l"
     and svran_fv: "svran \<sigma> \<subseteq> fv_eqs l"
     and sdom_svran_disj: "sdom \<sigma> \<inter> svran \<sigma> = {}"
-  sorry
+  oops
 
 
 (*********************************** definitions ***************************)
@@ -697,5 +728,5 @@ lemma wf_subst_scomp: "\<lbrakk> wf_subst arity \<sigma>; wf_subst arity \<tau> 
 
 lemma wf_subst_unify: "\<lbrakk> unify l = Some \<sigma>; wf_eqs arity l \<rbrakk> \<Longrightarrow> wf_subst arity \<sigma>"
   apply (induction l)
-  sorry
+  oops
 end
