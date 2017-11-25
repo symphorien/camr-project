@@ -12,7 +12,7 @@ fun fv :: "('f, 'v) term \<Rightarrow> 'v set" where
   "fv (Var x) = {x}"
 | "fv (Fun f xs) = (\<Union>x \<in> (set xs). fv x)"
 
-print_theorems
+print_theorems 
 
 type_synonym ('f, 'v) subst = "'v \<Rightarrow> ('f, 'v) term"
 
@@ -28,8 +28,6 @@ definition scomp :: "('f, 'v) subst \<Rightarrow> ('f, 'v) subst \<Rightarrow> (
 lemma sapply_sapply: "a \<cdot> b \<cdot> t = (scomp a b) \<cdot> t"
   by(induction t,simp_all add:scomp_def)
 
-lemma scomp_assoc: "scomp (scomp a b) c = scomp a (scomp b c)"
-  by(simp add:scomp_def fun_eq_iff sapply_sapply)
 
 (********************************* size argument ****************************)
 
@@ -432,17 +430,17 @@ lemma unifies_sapply_eq [simp]: "unifies \<sigma> (sapply_eq \<tau> eq) \<longle
 lemma unifies_scomp_fst: "unifies a b \<Longrightarrow> unifies (c \<circ>s a) b"
   by (auto simp add: scomp_def unifies.intros unifies.simps lambda_simp[symmetric])
 
-lemma sapply_notin_fv: "\<lbrakk> x \<notin> fv t \<rbrakk> \<Longrightarrow> (Var (x := t)) \<cdot> t = t"
-proof (induction t rule: term.induct)
+lemma sapply_notin_fv: "\<lbrakk> x \<notin> fv t \<rbrakk> \<Longrightarrow> (Var (x := s)) \<cdot> t = t"
+proof (induction t arbitrary: s rule: term.induct)
   case (Var x)
   then show ?case by auto
 next
-  case (Fun x1a x2)
-  let ?t = "Fun x1a x2"
-  assume 1: "\<And>x2a. x2a \<in> set x2 \<Longrightarrow> x \<notin> fv x2a \<Longrightarrow> Var(x := x2a) \<cdot> x2a = x2a"
-  have "Var (x := ?t) \<cdot> ?t = Fun x1a (map (sapply (Var (x := ?t))) x2)" by simp
-  moreover have "\<forall>x2s \<in> set x2. x \<notin> fv x2s" using \<open>x \<notin> fv ?t\<close> by simp
-  ultimately show ?case by (smt "1" \<open>Var(x := Fun x1a x2) \<cdot> Fun x1a x2 = Fun x1a (map (op \<cdot> (Var(x := Fun x1a x2))) x2)\<close> fun_upd_apply map_idI sapply_cong)
+  case 2: (Fun f xs)
+  have "x \<notin> (\<Union>y \<in> (set xs). fv y)" using \<open>x \<notin> fv (Fun f xs)\<close> by simp
+  then have "(\<forall>y \<in> (set xs). x \<notin> fv y)" by simp
+  then have "(\<forall>y \<in> (set xs). (Var (x := Fun f xs)) \<cdot> y = y)" using 2 by blast
+  moreover have "Var (x := (Fun f xs)) \<cdot> (Fun f xs) = Fun f (map (sapply (Var (x := Fun f xs))) xs)" by simp
+  ultimately show ?case by (metis "2.IH" \<open>\<forall>y\<in>set xs. x \<notin> fv y\<close> map_idI sapply.simps(2))
 qed
 
 lemma unifies_triv: "\<lbrakk> x \<notin> fv t \<rbrakk> \<Longrightarrow> unifies (Var (x := t)) (Var x, t)"
@@ -456,17 +454,36 @@ qed
 lemma unify_notin_fv: "\<lbrakk> x \<notin> fv t \<rbrakk> \<Longrightarrow> unifiess \<sigma> (sapply_eqs (Var (x := t)) xs) \<longleftrightarrow> unifiess (\<sigma> \<circ>s (Var (x := t))) ((Var x, t) # xs)"
   by (auto simp add: unifiess_def unifies_scomp_fst unifies_triv)
 
+lemma unifier_invariant: "\<lbrakk> x \<notin> fv b; unifies \<tau> (Var x, b) \<rbrakk> \<Longrightarrow> \<tau> \<circ>s (Var (x := b)) = \<tau>"
+proof (rule ext)
+  assume "x \<notin> fv b" and "unifies \<tau> (Var x, b)"
+  fix xa
+  show "(\<tau> \<circ>s (Var (x := b))) xa = \<tau> xa" 
+  proof (cases "xa = x")
+    case True
+    have "(\<tau> \<circ>s (Var (x := b))) xa = \<tau> \<cdot> b" using \<open>xa = x\<close> by simp
+    then have "... = \<tau> x" using \<open>unifies \<tau> (Var x, b)\<close> by (simp add: unifies.simps)
+    then show ?thesis by simp
+  next
+    case False
+    have "(\<tau> \<circ>s (Var (x := b))) xa = \<tau> xa" using \<open>xa \<noteq> x\<close> by simp
+    then show ?thesis by simp
+  qed 
+qed
+
 lemma unify_notin_fv_spec:
   assumes "x \<notin> fv t"
       and "unifiess \<sigma> ((Var x, t) # xs)"
     shows "unifiess \<sigma> (sapply_eqs (Var (x := t)) xs)"
-proof -
-  have "unifies \<sigma> (Var x, t)" using assms by (simp add: unifiess_def) 
-  then have "\<sigma> x = \<sigma> \<cdot> t" by (simp add: unifies.simps)
-  have "unifiess \<sigma> xs" using assms by (simp add: unifiess_def)
-  then have "\<forall>(a,b) \<in> set xs. unifies \<sigma> (a,b)" by (auto simp add: unifiess_def)
-  then have "\<forall>(a,b) \<in> set xs. \<sigma> \<cdot> a = \<sigma> \<cdot> b" by (auto simp add: unifies.simps)
-  then have "\<forall>(a,b) \<in> set (sapply_eqs (Var (x := t)) xs). "
+  apply (simp add: unifiess_def)
+proof (safe)
+  fix a b
+  assume "(a, b) \<in> set xs"
+  have "unifies \<sigma> (Var x, t)" using assms by (simp add: unifiess_def)
+  then have "\<sigma> \<circ>s (Var (x := t)) = \<sigma>" using assms by (simp add: unifier_invariant)
+  moreover have "unifies \<sigma> (a, b)" using \<open>(a,b) \<in> set xs\<close>  assms by (simp add: unifiess_def) 
+  ultimately show "unifies (\<sigma> \<circ>s Var(x := t)) (a, b)" by simp
+qed
 
 
 (**** SOUNDNESS **** SOUNDNESS **** SOUNDNESS **** SOUNDNESS **** SOUNDNESS ****)
@@ -525,7 +542,7 @@ qed
 
 
 lemma unify_mgu: "\<lbrakk>unify l = Some \<sigma>; unifiess \<tau> l\<rbrakk> \<Longrightarrow> \<exists> \<rho>. \<tau> = \<rho> \<circ>s \<sigma>"
-proof (induction l arbitrary: \<sigma> rule: unify.induct)
+proof (induction l arbitrary: \<sigma> \<tau> rule: unify.induct)
   case 1
   have "unify [] = Some Var" by simp
   then have "\<sigma> = Var" using \<open>unify [] = Some \<sigma>\<close> by simp
@@ -554,10 +571,12 @@ next
       let ?term = "sapply_eqs (Var(x := b)) xs" 
       case x_free: False
       have "unify ((Var x, b) # xs) = scomp_opt (unify ?term) (Var (x := b))" using x_free b_fun by simp
-      then have "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using 2 by simp
+      then have 3: "scomp_opt (unify ?term) (Var (x := b)) = Some \<sigma>" using 2 by simp
       then have "\<exists>\<tau>. unify ?term = Some \<tau>" by (auto simp add: scomp_some)
-      then obtain \<sigma> where "unify ?term = Some \<sigma>" by blast
-      then show ?thesis oops
+      then obtain \<sigma>\<^sub>2 where 4: "unify ?term = Some \<sigma>\<^sub>2" by blast
+      moreover have "unifiess \<tau> ?term" using 2 \<open>x \<notin> fv b\<close> unify_notin_fv_spec by auto
+      ultimately have "\<exists>\<rho>. \<tau> = \<rho> \<circ>s \<sigma>\<^sub>2" using 2 \<open>x \<notin> fv b\<close> \<open>b \<noteq> Var x\<close> by blast
+      then show ?thesis by (metis "2.prems"(2) "3" "4" list.set_intros(1) option.inject scomp_assoc scomp_opt.simps(1) unifier_invariant unifiess_def x_free)
     qed
   qed
 next
@@ -603,7 +622,7 @@ case (2 x b xs)
     have "unify ((Var x, b) # xs) = unify xs" using \<open>b = Var x\<close> by simp 
     then show ?thesis using \<open>\<exists>\<sigma>. unify xs = Some \<sigma>\<close> by simp
   next
-    case False
+    case b_notvar: False
     then show ?thesis
     proof (cases "x \<in> fv b")
       case True
@@ -614,8 +633,16 @@ case (2 x b xs)
       ultimately have False by simp
       then show ?thesis by simp
     next
-      case False
-      then show ?thesis oops
+      let ?term = "(sapply_eqs (Var(x := b)) xs)"
+      case x_free: False
+      obtain \<tau> where "unifiess \<tau> ((Var x, b) # xs)" using 2 by blast 
+      then have "unifiess \<tau> ?term" using \<open>x \<notin> fv b\<close>  unify_notin_fv_spec by simp
+      then have "\<exists>\<sigma>. unify (sapply_eqs (Var(x := b)) xs) = Some \<sigma>" using 2 \<open>x \<notin> fv b\<close> \<open>b \<noteq> Var x\<close> by blast
+      then obtain \<sigma> where "unify (sapply_eqs (Var(x := b)) xs) = Some \<sigma>" by blast
+      moreover have "unify ((Var x, b) # xs) = scomp_opt (unify (sapply_eqs (Var (x := b)) xs)) (Var (x := b))" using x_free b_notvar by simp
+      ultimately have "unify ((Var x, b) # xs) = scomp_opt (Some \<sigma>) (Var (x := b))" by auto
+      then have "unify ((Var x, b) # xs) = Some (\<sigma> \<circ>s (Var (x := b)))" by simp
+      then show ?thesis by simp
     qed
   qed
 next
@@ -648,6 +675,21 @@ proof -
   then have "unifiess x l" using 1 by (simp add: unify_return)
   then have "unify l = Some x \<and> unifiess x l" using 1 by simp
   then show ?thesis by (rule exI[where ?x = x])
+qed
+
+lemma one: "\<lbrakk> unify l = Some \<sigma> \<rbrakk> \<Longrightarrow> fv_eqs (sapply_eqs \<sigma> l) \<subseteq> fv_eqs l"
+proof (induction l rule: unify.induct)
+  case 1
+  then show ?case by auto
+next
+  case (2 x b xs)
+  then show ?case sorry
+next
+  case (3 v va x xs)
+  then show ?case sorry
+next
+  case (4 f l1 g l2 xs)
+  then show ?case sorry
 qed
 
 
