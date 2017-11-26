@@ -67,11 +67,33 @@ lemma sapplyc_scomp:"sapplyc (scomp_msg t s) c = sapplyc t (sapplyc s (c))"
     apply(simp_all add:sapply_msg_scomp_msg)
   done
 
-definition fvl:: "msg list \<Rightarrow> var set" where
+lemma sapplyl_Variable[simp]: "sapplyl Variable x = x"
+proof(induction x)
+  case Nil
+  then show ?case by(simp add:sapplyl_def sapply_msg_simps)
+next
+  case (Cons a x)
+  then show ?case by(simp add:sapplyl_def sapply_msg_simps)
+qed
+
+lemma sapplyc_Variablei[simp]: "sapplyc Variable x = x"
+  by(cases x)(simp add:sapplyc_def sapply_msg_simps)
+
+lemma sapplys_Variable[simp]: "sapplys Variable x = x"
+proof(induction x)
+  case Nil
+then show ?case by(simp add:sapplys_def)
+next
+  case (Cons a x)
+  then show ?case by(simp add:sapplys_def)
+qed
+  
+
+fun fvl:: "msg list \<Rightarrow> var set" where
 "fvl l = (\<Union>m \<in> set l. fv_msg m)"
-definition fvc:: "constraint \<Rightarrow> var set" where
+fun fvc:: "constraint \<Rightarrow> var set" where
 "fvc c = (case c of a|m}t \<Rightarrow> (fvl a) \<union> (fvl m) \<union> (fv_msg t))"
-definition fvs:: "system \<Rightarrow> var set" where
+fun fvs:: "system \<Rightarrow> var set" where
 "fvs cs = (\<Union>c \<in> set cs. fvc c)"
 
 (* (b) *)
@@ -287,4 +309,36 @@ qed
 
 lemma cs_sound: "red cs \<subseteq> sol cs"
   by(auto simp add:sol_rer_star elim!:redE is_redE)
+
+(* termination -- 8b *)
+fun \<theta>:: "msg \<Rightarrow> nat" where
+"\<theta> (Hash x) = \<theta> x + 1"
+| "\<theta> (Concat x y) = \<theta> x  + \<theta> y + 1"
+| "\<theta> (Sym_encrypt x y) = \<theta> x  + \<theta> y + 1"
+| "\<theta> (Pub_encrypt x y) = \<theta> x  + \<theta> y + 1"
+| "\<theta> (Sign x y) = (if y= Const ''intruder'' then \<theta> x + 1 else 1)"
+| "\<theta> x = 1"
+
+fun \<chi>:: "msg \<Rightarrow> nat" where
+"\<chi> (Hash x) = \<chi> x +1"
+| "\<chi> (Concat x y) = (\<chi> x)*(\<chi> y) +1"
+| "\<chi> (Sym_encrypt x y) = (\<chi> x) + \<theta> y + 1"
+| "\<chi> (Pub_encrypt x y) = (\<chi> x) + 1"
+| "\<chi> (Sign x y) = (\<chi> x) + 1"
+| "\<chi> x  = 1"
+
+fun \<chi>l :: "msg list \<Rightarrow> nat" where
+"\<chi>l [] = 1" | "\<chi>l (x#tail) = (\<chi> x) * (\<chi>l tail)"
+
+fun weight:: "constraint \<Rightarrow> nat" where
+"weight (m|a}t) = (\<chi>l m)*(\<theta> t)"
+
+lemma rer1_fv: "c \<leadsto>1[s] cs \<Longrightarrow> fvs(cs@(sapplys s (head@tail))) \<subseteq> fvs(head@c#tail)"
+proof(induction c s cs arbitrary:head tail rule:rer1.induct)
+  case (rer1_unify t u m a s)
+  then show ?case sorry
+next
+  case (rer1_ksub u agent a s m t)
+  then show ?case sorry
+qed(auto)
 end

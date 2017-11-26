@@ -108,6 +108,7 @@ lemma sapply_msg_simps:
 "sapply_msg s (Pub_encrypt x y) = Pub_encrypt (sapply_msg s x) (sapply_msg s y)"
 "sapply_msg s (Sign x y) = Sign (sapply_msg s x) (sapply_msg s y)"
 "sapply_msg s (Const z) = Const z"
+"sapply_msg Variable x = x"
   by(auto simp add:sapply_msg_def)
 
 (* scomp *)
