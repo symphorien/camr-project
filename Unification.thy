@@ -272,7 +272,7 @@ lemma fv_sapply_eq: "fv_eq (sapply_eq \<sigma> (a,b)) = fv (\<sigma> \<cdot> a) 
   by auto
 
 lemma fv_sapply_eqs: "fv_eqs (sapply_eqs \<sigma> l) = (\<Union>x \<in> set l. fv_eq (sapply_eq \<sigma> x))"
-  by auto
+  by (auto)
 
 lemma sapply_scomp_distrib_eq: "sapply_eq (\<sigma> \<circ>s \<tau>) (a,b) = (\<sigma> \<cdot> (\<tau> \<cdot> a), \<sigma> \<cdot> (\<tau> \<cdot> b))"
   by (simp)
@@ -392,11 +392,55 @@ fun scomp_opt :: "('f, 'v) subst option \<Rightarrow> ('f, 'v) subst \<Rightarro
   "scomp_opt (Some \<sigma>) \<tau> = Some (\<sigma> \<circ>s \<tau>)"
 | "scomp_opt None _ = None"
 
-print_theorems
+fun size_exp :: "('f, 'v) term \<Rightarrow> nat" where
+  "size_exp (Var _) = 0"
+| "size_exp (Fun _ l) = 1 + sum_list (map size_exp l)"
+
+fun eqs_size :: "('f, 'v) equations \<Rightarrow> nat" where
+  "eqs_size [] = 0"
+| "eqs_size ((e, _) # eqs) = size_exp e + eqs_size eqs"
+
+lemma eqs_size_append: "eqs_size (xs @ ys) = eqs_size xs + eqs_size ys"
+  apply (induction xs)
+  by auto
+
+lemma eqs_size_zip [simp]: "\<lbrakk> length l1 = length l2 \<rbrakk> \<Longrightarrow> eqs_size (xs @ zip l1 l2) = eqs_size xs + sum_list (map size_exp l1)"
+proof (induction l1 l2 rule: list_induct2) 
+  case Nil
+  then show ?case by auto
+next
+  case (Cons x xs y ys)
+  then show ?case by (auto simp add: eqs_size_append)
+qed
 
 lemma scomp_some: "scomp_opt a b = Some c \<Longrightarrow> \<exists>\<sigma>. a = Some \<sigma>"
   apply (cases a)
   by auto
+
+lemma finite_fv [simp]: "finite (fv e)"
+  apply (induction e)
+  by auto
+
+lemma finite_fv_eq [simp]: "finite (fv_eq e)"
+  apply (cases e)
+  by auto
+
+lemma finite_fv_eqs [simp]: "finite (fv_eqs l)"
+  apply (induction l)
+  by (auto)
+
+lemma fv_eqs_cons [simp]: "fv_eqs (eq # eqs) = fv_eq eq \<union> fv_eqs eqs"
+  by (auto) 
+
+lemma fv_eq_subst_eq: "fv_eq (sapply_eq \<sigma> eq) = (\<Union>x\<in>fv_eq eq. fv (\<sigma> x))"
+  by(cases eq)(simp add: fv_sapply)
+
+lemma fv_eqs_subst_eqs: "fv_eqs (map (sapply_eq \<sigma>) eqs) = (\<Union> x\<in>fv_eqs eqs. fv (\<sigma> x))"
+  by(simp add: fv_eq_subst_eq)
+
+lemma fv_eqs_zip [simp]: "\<lbrakk> length l1 = length l2 \<rbrakk> \<Longrightarrow> fv_eqs (xs @ zip l1 l2) = (\<Union>x\<in>set l1. fv x) \<union> (\<Union>x\<in>set l2. fv x) \<union> fv_eqs xs"
+  apply (induction l1 l2 rule: list_induct2)
+  by (auto)
 
 function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst option" where
   "unify [] = Some Var"
@@ -404,15 +448,10 @@ function (sequential) unify :: "('f, 'v) equations \<Rightarrow> ('f, 'v) subst 
 | "unify ((b, Var x) # xs) = unify ((Var x, b) # xs)"
 | "unify ((Fun f l1, Fun g l2) # xs) = (if g = f then (if length l2 = length l1 then unify (xs @ (zip l1 l2)) else None) else None)"
 by pat_completeness auto
-termination 
+termination
   apply (relation "measures [
-  (\<lambda>U. card (fv_eqs U)), 
-  (\<lambda>U. measure2 U), 
-  (\<lambda>U. length U)]")
-       apply (auto intro: card_insert_le card_mono psubset_card_mono split: if_split_asm) []
-  sorry
-
-print_theorems
+  (\<lambda>U. card (fv_eqs U)), eqs_size, length]") 
+  by (auto intro!: psubset_card_mono card_mono split: if_split_asm simp add: fv_eqs_subst_eqs simp del: fv_eqs.simps) 
 
 
 (******************************** lemmata *********************************)
