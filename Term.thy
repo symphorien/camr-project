@@ -72,6 +72,16 @@ qed
 definition fv_msg:: "msg \<Rightarrow> var set" where
 "fv_msg m = fv (embed m)"
 
+lemma fv_msg_simps:
+"fv_msg (Hash x) = fv_msg x"
+"fv_msg (Concat x y) = fv_msg x \<union> fv_msg y"
+"fv_msg (Pub_encrypt x y) = fv_msg x \<union> fv_msg y"
+"fv_msg (Sym_encrypt x y) = fv_msg x \<union> fv_msg y"
+"fv_msg (Sign x y) = fv_msg x \<union> fv_msg y"
+"fv_msg (Variable z) = {z}"
+"fv_msg (Const z) = {}"
+  by(auto simp add:fv_msg_def)
+
 (* substs *)
 type_synonym subst_msg = "var \<Rightarrow> msg"
 definition embed_subst :: "subst_msg \<Rightarrow> (var \<Rightarrow> msg_term)" where

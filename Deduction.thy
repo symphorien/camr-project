@@ -409,4 +409,54 @@ next
 
   then show ?case by(simp add:Un_commute Un_assoc insert_commute sapplys_def del:fvc.simps)
 qed(auto simp add:fv_msg_def)
+
+lemma rer1_fv2: "c \<leadsto>1[s] cs \<Longrightarrow> s \<noteq> Variable \<Longrightarrow> fvs (cs @ sapplys s (head @ tail)) \<noteq> fvs(head @ c#tail)"
+proof(induction c s cs arbitrary:head tail rule:rer1.induct)
+  case (rer1_unify t u m a s)
+  then show ?case  proof -
+    let ?cs="head@tail"
+    from `u \<in> set m \<union> set a` have x:"fv_msg u \<subseteq> fvc (a|m}t)" by(auto)
+    from  `unify_msg [(t, u)] = Some s` have "sdom_msg s \<subseteq> fv_eqs_msg [(t, u)]" by(rule l3_msg)
+    also have "... \<subseteq> fv_msg t \<union> fv_msg u" by(auto simp add:fv_eqs_msg_def fv_msg_def)
+    also have "... \<subseteq> fv_msg t \<union> fvc (a|m}t)" using x by(auto simp add:Un_commute Un_assoc insert_commute)
+    finally have sdominc:"sdom_msg s \<subseteq> fvc (a|m}t)" by(auto)
+
+    from `s \<noteq> Variable` obtain x where xdef:"x \<in> sdom_msg s" by(auto simp add:sdom_msg_def_real)
+    from this and sdominc have "x \<in> fvc (a|m}t)" by auto
+    then have part1:"x \<in> fvs(head @ (a|m}t)#tail)" by auto
+
+    from  `unify_msg [(t, u)] = Some s` have "sdom_msg s \<inter> svran_msg s = {}" by(rule l3_msg)
+    from this and xdef have svninc:"x \<notin> svran_msg s" by auto
+
+    have "fvs (sapplys s ?cs) \<subseteq> fvs ?cs - sdom_msg s \<union> svran_msg s" (is "?lhs \<subseteq> ?rhs") by(rule fv_sapplys_sdom_svran)
+    moreover from xdef and svninc have "x \<notin> ?rhs" by auto
+    ultimately have "x \<notin> ?lhs" by blast
+    then have "x \<notin> fvs ([] @ sapplys s (head @ tail))" by auto
+    
+    from this and part1 show ?case by blast
+  qed
+next
+  case (rer1_ksub u agent a s m t)
+  then show ?case
+  proof -
+    have "agent \<in> fv_msg (Pub_encrypt u (Variable agent))" by(simp add:fv_msg_simps)
+    from this and `Pub_encrypt u (Variable agent) \<in> set a`
+    have part1:"agent \<in> fvs (head @ a|m} t  # tail)" by auto
+
+    let ?cs="head @ a|m} t  # tail"
+    let ?s="Variable(agent := Const ''intruder'')"
+    have "svran_msg ?s = {}" and "sdom_msg ?s={agent}"
+      by(auto simp add:svran_msg_def_real sran_msg_def_real sdom_msg_def_real fv_msg_def)
+    then have svran:"svran_msg s = {}" "sdom_msg s = {agent}"
+      by(simp_all add:`s = ?s`)
+    have "fvs (sapplys s ?cs) \<subseteq> fvs ?cs - sdom_msg s \<union> svran_msg s" (is "?lhs \<subseteq> ?rhs") by(rule fv_sapplys_sdom_svran)
+    then have "fvs (sapplys s ?cs) \<subseteq> fvs ?cs - {agent}" by(simp add:svran)
+
+    moreover have "fvs ([sapplyc s (a|m} t )] @ sapplys s (head @ tail)) = (fvs (sapplys s ?cs))" (is "?lhs = ?rhs")
+      by(simp add:sapplys_def)
+    ultimately have "?lhs \<subseteq> fvs ?cs - {agent}" by simp
+    then have "agent \<notin> ?lhs" by blast
+    from this and  part1 show ?thesis by blast
+  qed
+qed(auto)
 end
