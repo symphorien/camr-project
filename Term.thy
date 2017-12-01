@@ -88,6 +88,9 @@ qed
 lemma wf_subst_embed_subst[simp]: "wf_subst arity (embed_subst s)"
   by(auto intro!:wf_subst.intros simp add:embed_subst_def)
 
+lemma wf_term_embed_subst[simp]: "wf_term arity (embed_subst s x)"
+  by(auto simp add:embed_subst_def intro:wf_term.intros)
+
 lemma subst_from_embed_embed_subst[simp]:"subst_from_embed (embed_subst s) = s"
   by(auto simp add:embed_subst_def subst_from_embed_def)
 
@@ -215,8 +218,68 @@ lemma "sapply_eqs_msg s l = map (sapply_eq_msg s) l"
 
 definition sdom_msg:: "subst_msg \<Rightarrow> var set" where
 "sdom_msg s = sdom (embed_subst s)"
+definition sran_msg:: "subst_msg \<Rightarrow> msg set" where
+"sran_msg s = image msg_of_term (sran (embed_subst s))"
 definition svran_msg:: "subst_msg \<Rightarrow> var set" where
 "svran_msg s = svran (embed_subst s)"
+
+lemma sdom_msgI: "s x \<noteq> Variable x \<Longrightarrow> x \<in> sdom_msg s"
+    by(cases "s x")(auto simp add:sdom_msg_def sdom_def embed_subst_def embed_def)
+lemma sdom_msg_def_real: "sdom_msg s = {x.  s x \<noteq> Variable x}"
+proof(rule equalityI)
+  show "sdom_msg s \<subseteq> {x. s x \<noteq> Variable x}"
+    by(auto simp add:sdom_msg_def sdom_def embed_subst_def embed_def intro:sdom_msgI)
+next
+  show "{x. s x \<noteq> Variable x} \<subseteq> sdom_msg s"
+    by(auto intro:sdom_msgI)
+qed
+
+lemma embed_neg_inj:"embed x \<noteq> embed y \<Longrightarrow> x \<noteq> y"
+  by(auto)
+
+lemma sran_msg_def_real:  "sran_msg s = {s x | x. x \<in> sdom_msg s}"
+proof(rule equalityI;rule subsetI)
+  fix x
+  assume "x \<in> sran_msg s"
+  then obtain v where dom:"v\<in>sdom_msg s" and xdef:"embed x = (embed_subst s) v" by(auto simp add:sran_def sdom_msg_def sran_msg_def)
+
+  from xdef have "msg_of_term (embed x)=msg_of_term ((embed_subst s) v)" by(simp)
+  then have "x=s v" by(simp add:embed_subst_def)
+
+  from this and dom show "x \<in> {s x |x. x \<in> sdom_msg s}" by(auto)
+next
+  fix t
+  assume "t \<in> {s x |x. x \<in> sdom_msg s}"
+  then obtain x where tdef:"t=s x" and dom:"x \<in> sdom_msg s" by(auto)
+  from dom have "x \<in> sdom (embed_subst s)" by(simp add: sdom_msg_def)
+  moreover from tdef have "t = msg_of_term ((embed_subst s) x)" by(simp add:embed_subst_def)
+  ultimately show "t \<in> sran_msg s"
+    by(auto simp add:sran_msg_def sran_def)
+qed
+
+lemma wf_term_sran[simp]:"wf_subst arity s \<Longrightarrow> x\<in>sran s \<Longrightarrow> wf_term arity x"
+  by(auto simp add:sran_def wf_subst.simps)
+
+lemma svran_msg_def_real: "svran_msg s = (\<Union> t \<in> sran_msg s. fv_msg t)"
+proof(rule equalityI;rule subsetI)
+  fix x
+  assume "x \<in> svran_msg s"
+  then obtain t where xdef:"x \<in> fv t" and tdef:"t \<in> sran (embed_subst s)"by(auto simp add:svran_msg_def svran_def)
+  have "wf_subst arity (embed_subst s)" by simp
+  from this and tdef have "wf_term arity t" by(rule wf_term_sran)
+  from this and xdef and tdef have "x \<in> fv_msg (msg_of_term t)" and "msg_of_term t \<in> sran_msg s"
+    by(auto simp add:sran_msg_def fv_msg_def)
+  then show "x \<in> (\<Union> t \<in> sran_msg s. fv_msg t)" by auto
+next
+  fix x
+  assume "x\<in>(\<Union> t \<in> sran_msg s. fv_msg t)"
+  then obtain t where tdef:"t\<in> (sran_msg s)" and xdef:"x \<in> fv(embed t)" by(auto simp add:fv_msg_def) 
+  from tdef have "embed t \<in> sran (embed_subst s)" by(auto simp add:sran_msg_def sran_def)
+  from this and xdef show "x \<in> svran_msg s" by(auto simp add:svran_msg_def svran_def)
+qed
+
+lemma sdom_msg_simp: "sdom_msg (Variable(x:=Const y)) = {x}" (is "sdom_msg ?s = _")
+  by(auto simp add:sdom_msg_def_real)
 
 lemma fv_sapply_sdom_svran_msg: "fv_msg (sapply_msg s t) \<subseteq> ((fv_msg t) - (sdom_msg s)) \<union> (svran_msg s)"
 (is "?lhs \<subseteq> ?rhs")

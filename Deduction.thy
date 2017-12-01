@@ -384,7 +384,6 @@ proof(induction c s cs arbitrary:head tail rule:rer1.induct)
   then show ?case
   proof -
     let ?cs="head@tail"
-    thm l3_msg
     from `u \<in> set m \<union> set a` have x:"fv_msg u \<subseteq> fvc (a|m}t)" by(auto)
     from  `unify_msg [(t, u)] = Some s` have "svran_msg s \<subseteq> fv_eqs_msg [(t, u)]" by(rule l3_msg)
     also have "... \<subseteq> fv_msg t \<union> fv_msg u" by(auto simp add:fv_eqs_msg_def fv_msg_def)
@@ -398,6 +397,16 @@ proof(induction c s cs arbitrary:head tail rule:rer1.induct)
   qed
 next
   case (rer1_ksub u agent a s m t)
-  then show ?case sorry
-qed(auto)
+  let ?cs="head @ a|m} t  # tail"
+  have "svran_msg (Variable(agent := Const ''intruder'')) = {}"
+    by(auto simp add:svran_msg_def_real sran_msg_def_real sdom_msg_def_real fv_msg_def)
+  then have svran:"svran_msg s = {}"
+    by(simp add:`s = Variable(agent := Const ''intruder'')`)
+
+  have "fvs (sapplys s ?cs) \<subseteq> fvs ?cs - sdom_msg s \<union> svran_msg s" by(rule fv_sapplys_sdom_svran)
+  also have "... \<subseteq> fvs ?cs - sdom_msg s" by(simp add:svran)
+  finally have "fvs (sapplys s ?cs) \<subseteq> fvs ?cs" by blast
+
+  then show ?case by(simp add:Un_commute Un_assoc insert_commute sapplys_def del:fvc.simps)
+qed(auto simp add:fv_msg_def)
 end
