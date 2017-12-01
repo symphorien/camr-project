@@ -96,6 +96,51 @@ fun fvc:: "constraint \<Rightarrow> var set" where
 fun fvs:: "system \<Rightarrow> var set" where
 "fvs cs = (\<Union>c \<in> set cs. fvc c)"
 
+lemma fv_sapplyl_sdom_svran: "fvl (sapplyl s l) \<subseteq> ((fvl l) - sdom_msg s) \<union> (svran_msg s)" (is "?lhs \<subseteq> ?rhs")
+proof(induction l)
+  case Nil
+  then show ?case by(simp add:sapplyl_def fv_sapply_sdom_svran_msg)
+next
+  case (Cons a as)
+  have "fv_msg (sapply_msg s a) \<subseteq> ((fv_msg (a)) - sdom_msg s) \<union> (svran_msg s)"
+    by(rule fv_sapply_sdom_svran_msg)
+  then have "fv_msg (sapply_msg s a) \<subseteq> ((fvl (a#as)) - sdom_msg s) \<union> (svran_msg s)"
+    by(auto)
+  moreover have "fvl (sapplyl s as) \<subseteq> ((fvl (as)) - sdom_msg s) \<union> (svran_msg s)"
+    by(rule Cons)
+  then have "fvl (sapplyl s as) \<subseteq> ((fvl (a#as)) - sdom_msg s) \<union> (svran_msg s)" by auto
+  moreover have "fvl (sapplyl s (a#as)) = fv_msg (sapply_msg s a) \<union> fvl (sapplyl s as)"
+    by(simp add:sapplyl_def)
+  ultimately show "fvl (sapplyl s (a#as)) \<subseteq> ((fvl (a#as)) - sdom_msg s) \<union> (svran_msg s)"
+    by(simp add:sapplyl_def)
+qed
+
+lemma fv_sapplyc_sdom_svran: "fvc (sapplyc s c) \<subseteq> ((fvc c) - sdom_msg s) \<union> (svran_msg s)" (is "?lhs \<subseteq> ?rhs")
+proof(cases c)
+  case (Constraint a m t)
+  from fv_sapply_sdom_svran_msg[of s t] have "fv_msg (sapply_msg s t) \<subseteq> ?rhs"
+    by(auto simp add:Constraint Un_commute Un_assoc insert_commute)
+  moreover from fv_sapplyl_sdom_svran[of s a] have "fvl (sapplyl s a) \<subseteq> ?rhs"
+    by(auto simp add:Constraint Un_commute Un_assoc insert_commute)
+  moreover from fv_sapplyl_sdom_svran[of s m] have "fvl (sapplyl s m) \<subseteq> ?rhs"
+    by(auto simp add:Constraint Un_commute Un_assoc insert_commute)
+  ultimately show ?thesis
+    by(simp add:sapplyc_def Constraint)
+qed
+
+lemma fv_sapplys_sdom_svran: "fvs (sapplys s cs) \<subseteq> ((fvs cs) - sdom_msg s) \<union> (svran_msg s)"
+proof(induction cs)
+  case Nil
+then show ?case by(simp add:sapplys_def fv_sapplyc_sdom_svran)
+next
+  case (Cons a as)
+  from fv_sapplyc_sdom_svran[of s a] have "fvc (sapplyc s a) \<subseteq> ((fvs (a#as)) - sdom_msg s) \<union> (svran_msg s)"
+    by(auto simp add:Cons Un_commute Un_assoc insert_commute)
+  moreover from Cons have "fvs (sapplys s as) \<subseteq> ((fvs (a#as)) - sdom_msg s) \<union> (svran_msg s)"
+    by(auto simp add:Cons Un_commute Un_assoc insert_commute)
+  ultimately show ?case by(auto simp add:sapplys_def Un_commute Un_assoc insert_commute)
+qed
+
 (* (b) *)
 (* solution set *)
 definition solved:: "constraint \<Rightarrow> bool" where
@@ -336,7 +381,21 @@ fun weight:: "constraint \<Rightarrow> nat" where
 lemma rer1_fv: "c \<leadsto>1[s] cs \<Longrightarrow> fvs(cs@(sapplys s (head@tail))) \<subseteq> fvs(head@c#tail)"
 proof(induction c s cs arbitrary:head tail rule:rer1.induct)
   case (rer1_unify t u m a s)
-  then show ?case sorry
+  then show ?case
+  proof -
+    let ?cs="head@tail"
+    thm l3_msg
+    from `u \<in> set m \<union> set a` have x:"fv_msg u \<subseteq> fvc (a|m}t)" by(auto)
+    from  `unify_msg [(t, u)] = Some s` have "svran_msg s \<subseteq> fv_eqs_msg [(t, u)]" by(rule l3_msg)
+    also have "... \<subseteq> fv_msg t \<union> fv_msg u" by(auto simp add:fv_eqs_msg_def fv_msg_def)
+    also have "... \<subseteq> fv_msg t \<union> fvc (a|m}t)" using x by(auto simp add:Un_commute Un_assoc insert_commute)
+    finally have svinc:"svran_msg s \<subseteq> fvc (a|m}t)" by(auto)
+
+    have "fvs (sapplys s ?cs) \<subseteq> fvs ?cs - sdom_msg s \<union> svran_msg s" by(rule fv_sapplys_sdom_svran)
+    also have "... \<subseteq> fvs ?cs \<union> svran_msg s" by blast
+    also have "... \<subseteq> fvs ?cs \<union> fvc (a|m}t)" using svinc by auto
+    finally show ?case by(simp add:Un_commute Un_assoc insert_commute sapplys_def del:fvc.simps)
+  qed
 next
   case (rer1_ksub u agent a s m t)
   then show ?case sorry

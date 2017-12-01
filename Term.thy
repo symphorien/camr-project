@@ -218,6 +218,21 @@ definition sdom_msg:: "subst_msg \<Rightarrow> var set" where
 definition svran_msg:: "subst_msg \<Rightarrow> var set" where
 "svran_msg s = svran (embed_subst s)"
 
+lemma fv_sapply_sdom_svran_msg: "fv_msg (sapply_msg s t) \<subseteq> ((fv_msg t) - (sdom_msg s)) \<union> (svran_msg s)"
+(is "?lhs \<subseteq> ?rhs")
+proof(rule subsetI)
+  fix x
+  let ?s = "embed_subst s"
+  let ?t = "embed t"
+  assume "x \<in> fv_msg (sapply_msg s t)"
+  then have "x \<in> fv (?s \<cdot> ?t)"
+    by(simp add:sdom_msg_def sapply_msg_def svran_msg_def fv_msg_def wf_term_sapply)
+  then have "x \<in> (fv (Term.embed t) - sdom (embed_subst s)) \<union> svran (embed_subst s)"
+    by(rule fv_sapply_sdom_svran)
+  then show "x \<in> ?rhs" 
+    by(simp add:sdom_msg_def sapply_msg_def svran_msg_def fv_msg_def wf_term_sapply)
+qed
+
 lemma l3_msg:
   fixes \<sigma> :: "subst_msg" 
     and l :: "eq_msg list"
