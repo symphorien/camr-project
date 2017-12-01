@@ -96,6 +96,11 @@ fun fvc:: "constraint \<Rightarrow> var set" where
 fun fvs:: "system \<Rightarrow> var set" where
 "fvs cs = (\<Union>c \<in> set cs. fvc c)"
 
+lemma finite_fv_msg[simp]: "finite (fv_msg cs)" by(simp add:fv_msg_def)
+lemma finite_fvl[simp]: "finite (fvl l)" by(induction l)simp_all
+lemma finite_fvc[simp]: "finite (fvc c)" by(cases c)simp_all
+lemma finite_fvs[simp]: "finite (fvs cs)" by(induction cs)(simp_all del:fvc.simps)
+
 lemma fv_sapplyl_sdom_svran: "fvl (sapplyl s l) \<subseteq> ((fvl l) - sdom_msg s) \<union> (svran_msg s)" (is "?lhs \<subseteq> ?rhs")
 proof(induction l)
   case Nil
@@ -397,6 +402,10 @@ lemma \<chi>l_append[simp]: "\<chi>l (a@b) = (\<chi>l a) * (\<chi>l b)"
 proof(induction a;induction b)
 qed simp_all
 
+lemma weights_append[simp]: "weights (a@b) = (weights a) + (weights b)"
+proof(induction a;induction b)
+qed simp_all
+
 lemma rer1_fv: "c \<leadsto>1[s] cs \<Longrightarrow> fvs(cs@(sapplys s (head@tail))) \<subseteq> fvs(head@c#tail)"
 proof(induction c s cs arbitrary:head tail rule:rer1.induct)
   case (rer1_unify t u m a s)
@@ -479,7 +488,7 @@ next
   qed
 qed(auto)
 
-lemma rer1_weight: "c \<leadsto>1[s] cs \<Longrightarrow> s = Variable \<Longrightarrow> weights cs < weight c"
+lemma rer1_weights: "c \<leadsto>1[s] cs \<Longrightarrow> s = Variable \<Longrightarrow> weights cs < weight c"
 proof(induction c s cs rule:rer1.induct)
   case (rer1_sdec x u k head tail m t)
   then show ?case
@@ -518,4 +527,59 @@ next
   ultimately have False by simp
   then show ?case by(rule FalseE)
 qed (simp_all add: add_mult_distrib2)
+
+lemma rer_fv: "cs \<leadsto>[s] cs' \<Longrightarrow> fvs(cs') \<subseteq> fvs(cs)"
+proof(induction cs s cs' rule:rer.induct)
+  case (1 c s cs head tail)
+  then show ?case by(rule rer1_fv)
+qed
+
+lemma rer_fv2: "cs \<leadsto>[s] cs' \<Longrightarrow> s \<noteq> Variable \<Longrightarrow> fvs(cs') \<noteq> fvs(cs)"
+proof(induction cs s cs' rule:rer.induct)
+  case (1 c s cs head tail)
+  then show ?case by(rule rer1_fv2)
+qed
+
+lemma rer_weights: "cs \<leadsto>[s] cs' \<Longrightarrow> s = Variable \<Longrightarrow> weights cs' < weights cs"
+proof(induction cs s cs' rule:rer.induct)
+  case (1 c s cs head tail)
+  then show ?case by(simp add:rer1_weights)
+qed
+
+inductive reducesto:: "system \<Rightarrow> system \<Rightarrow> bool" where
+"cs \<leadsto>[s] cs' \<Longrightarrow> reducesto cs cs'"
+
+definition termination_order::"(system \<times> system) set" where
+"termination_order = (% cs. card (fvs cs)) <*mlex*> (measure weights)" 
+
+
+
+lemma reducesto_subset_termination_order: "reducesto cs cs' \<Longrightarrow> (cs', cs) \<in> termination_order"
+proof(induction cs cs' rule:reducesto.induct)
+  case (1 cs s cs')
+  then have inc:"fvs cs' \<subseteq> fvs cs" by(rule rer_fv)
+  then have part1:"card (fvs cs') \<le> card (fvs cs)" by(simp add:card_mono del:fvs.simps)
+  show ?case
+proof(cases "s=Variable")
+  case True
+  from `cs \<leadsto>[s] cs'` and True have "weights cs' < weights cs" by(rule rer_weights)
+  then have "(cs', cs) \<in> measure weights" by simp
+  then show ?thesis by(auto simp add:termination_order_def part1 mlex_leq simp del:fvs.simps)
+next
+  case False
+  from `cs \<leadsto>[s] cs'` and False have "fvs cs' \<noteq> fvs cs" by(rule rer_fv2)
+  from this and inc have "fvs cs' \<subset> fvs cs" by blast
+  then have "card (fvs cs') < card (fvs cs)" by(simp add:psubset_card_mono del:fvs.simps)
+  then show ?thesis by(auto simp add:termination_order_def part1 mlex_less simp del:fvs.simps)
+qed
+qed
+
+lemma termination_red: "wf {(y, x). reducesto x y}" (is "wf ?o")
+proof -
+  have "?o \<subseteq> termination_order" by(auto simp add: reducesto_subset_termination_order simp del:fvs.simps)
+  moreover have "wf termination_order" by(auto simp add:termination_order_def wf_mlex)
+  ultimately show "wf ?o" by(simp add:wf_subset)
+qed
+
+
 end
