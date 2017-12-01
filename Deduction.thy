@@ -378,6 +378,25 @@ fun \<chi>l :: "msg list \<Rightarrow> nat" where
 fun weight:: "constraint \<Rightarrow> nat" where
 "weight (m|a}t) = (\<chi>l m)*(\<theta> t)"
 
+fun weights:: "constraint list \<Rightarrow> nat" where
+"weights [] = 0" | "weights (c#cs) = weight c + weights cs"
+
+lemma non_zero_theta[simp]: "\<theta> x > 0"
+proof(induction x rule:\<theta>.induct)
+qed(simp_all)
+
+lemma non_zero_chi[simp]: "\<chi> x > 0"
+proof(induction x rule:\<chi>.induct)
+qed(simp_all)
+
+lemma non_zero_chil[simp]: "\<chi>l x > 0" by(induction x)(simp_all)
+lemma non_zero_weight[simp]: "weight x > 0" by(cases x)(simp)
+lemma non_zero_weights[simp]: "x \<noteq> [] \<Longrightarrow>  weights x>0" by(induction x)simp_all
+
+lemma \<chi>l_append[simp]: "\<chi>l (a@b) = (\<chi>l a) * (\<chi>l b)"
+proof(induction a;induction b)
+qed simp_all
+
 lemma rer1_fv: "c \<leadsto>1[s] cs \<Longrightarrow> fvs(cs@(sapplys s (head@tail))) \<subseteq> fvs(head@c#tail)"
 proof(induction c s cs arbitrary:head tail rule:rer1.induct)
   case (rer1_unify t u m a s)
@@ -459,4 +478,44 @@ next
     from this and  part1 show ?thesis by blast
   qed
 qed(auto)
+
+lemma rer1_weight: "c \<leadsto>1[s] cs \<Longrightarrow> s = Variable \<Longrightarrow> weights cs < weight c"
+proof(induction c s cs rule:rer1.induct)
+  case (rer1_sdec x u k head tail m t)
+  then show ?case
+  proof -
+    from non_zero_theta have "Suc 0 \<le> \<theta> t" by (simp add: Suc_leI)
+      then  have "\<chi> u * \<theta> t < (1+\<chi> u)*(\<theta> t)" and "\<theta> k \<le> \<theta> k* \<theta> t" by auto
+    then have "\<chi> u * \<theta> t + \<theta> k < (1 + \<chi> u + \<theta> k) * \<theta> t" (is "?lhs < ?rhs")
+      by (metis add_less_cancel_right add_less_mono distrib_right le_neq_implies_less)
+    then have "\<chi>l head * \<chi>l tail * ?lhs < \<chi>l head * \<chi>l tail * ?rhs" by auto
+    then have "\<chi> u * (\<chi>l head * \<chi>l tail) * \<theta> t + \<chi>l head * \<chi>l tail * \<theta> k
+    < \<chi>l head * (\<chi>l tail + (\<chi> u + \<theta> k) * \<chi>l tail) * \<theta> t" 
+    (* sledgehammer *)
+    proof -
+      have f1: "\<chi> u * (\<chi>l head * \<chi>l tail) * \<theta> t + \<chi>l head * \<chi>l tail * \<theta> k = \<theta> t * \<chi> u * (\<chi>l tail * \<chi>l head) + \<theta> k * (\<chi>l tail * \<chi>l head)"
+        by simp
+      have f2: "\<chi>l head * (\<chi>l tail + (\<chi> u + \<theta> k) * \<chi>l tail) = (\<chi> u + \<theta> k + 1) * (\<chi>l head * \<chi>l tail)"
+        by (metis (no_types) semiring_normalization_rules(19) semiring_normalization_rules(3))
+      have "1 + \<chi> u + \<theta> k = \<chi> u + \<theta> k + 1"
+        by auto
+      then have "\<chi>l head * (\<chi>l tail + (\<chi> u + \<theta> k) * \<chi>l tail) * \<theta> t = (1 + \<chi> u + \<theta> k) * (\<theta> t * (\<chi>l tail * \<chi>l head))"
+        using f2 by (metis semiring_normalization_rules(19) semiring_normalization_rules(7))
+      then have "\<chi>l head * (\<chi>l tail + (\<chi> u + \<theta> k) * \<chi>l tail) * \<theta> t = (1 + \<chi> u + \<theta> k) * (\<chi>l head * \<chi>l tail * \<theta> t)"
+        by simp
+      then have "\<chi>l head * (\<chi>l tail + (\<chi> u + \<theta> k) * \<chi>l tail) * \<theta> t = \<chi>l head * \<chi>l tail * ((1 + \<chi> u + \<theta> k) * \<theta> t)"
+        by (simp add: semiring_normalization_rules(19))
+      then show ?thesis
+        using f1 by (metis (no_types) \<open>\<chi>l head * \<chi>l tail * (\<chi> u * \<theta> t + \<theta> k) < \<chi>l head * \<chi>l tail * ((1 + \<chi> u + \<theta> k) * \<theta> t)\<close> semiring_normalization_rules(1) semiring_normalization_rules(7))
+    qed
+      (* end sledgehammer *)
+    from this and rer1_sdec show ?case by auto
+  qed
+next
+  case (rer1_ksub u agent a s m t)
+  from ` s = Variable(agent := Const ''intruder'')` have "s agent = Const ''intruder''" by simp
+  moreover from `s=Variable` have "s agent = Variable agent" by simp
+  ultimately have False by simp
+  then show ?case by(rule FalseE)
+qed (simp_all add: add_mult_distrib2)
 end
