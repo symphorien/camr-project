@@ -213,6 +213,7 @@ next
   then show ?case by auto
 qed
 
+
 lemma sdom_scomp: "sdom (\<sigma> \<circ>s \<tau>) \<subseteq> sdom \<sigma> \<union> sdom \<tau>"
   by (auto simp add: sdom_def)
 
@@ -267,14 +268,43 @@ print_theorems
 fun sapply_eqs :: "('f, 'v) subst \<Rightarrow> ('f, 'v) equations \<Rightarrow> ('f, 'v) equations" where
   "sapply_eqs \<sigma> l = map (sapply_eq \<sigma>) l"
 
+print_theorems
+
 
 (******************************** lemmata *************************************)
+
 
 lemma fv_sapply_eq: "fv_eq (sapply_eq \<sigma> (a,b)) = fv (\<sigma> \<cdot> a) \<union> fv (\<sigma> \<cdot> b)"
   by auto
 
 lemma fv_sapply_eqs: "fv_eqs (sapply_eqs \<sigma> l) = (\<Union>x \<in> set l. fv_eq (sapply_eq \<sigma> x))"
   by (auto)
+
+lemma fv_sapply_eq_sdom_svran: "x \<in> fv_eq (sapply_eq \<sigma> t) \<Longrightarrow> x \<in> (fv_eq t - sdom \<sigma>) \<union> svran \<sigma>"
+proof -
+  assume "x \<in> fv_eq (sapply_eq \<sigma> t)"
+  moreover obtain a b where "t = (a,b)" using fv_eq.cases by blast
+  ultimately have "x \<in> fv (\<sigma> \<cdot> a) \<union> fv (\<sigma> \<cdot> b)" by auto
+  then have "x \<in> (fv a - sdom \<sigma>) \<union> svran \<sigma> \<union> (fv b - sdom \<sigma>) \<union> svran \<sigma>" using fv_sapply_sdom_svran by (metis Un_iff)
+  then have "x \<in> (fv a \<union> fv b - sdom \<sigma>) \<union> svran \<sigma>" by blast
+  then show ?thesis by (simp add: \<open>t = (a, b)\<close>)
+qed
+
+lemma fv_sapply_eqs_sdom_svran: "x \<in> fv_eqs (sapply_eqs \<sigma> t) \<Longrightarrow> x \<in> (fv_eqs t - sdom \<sigma>) \<union> svran \<sigma>"
+proof -
+  assume "x \<in> fv_eqs (sapply_eqs \<sigma> t)"
+  then have "x \<in> (\<Union>y \<in> set t. fv_eq (sapply_eq \<sigma> y))" by (auto simp add: fv_sapply_eqs)
+  then have "x \<in> (\<Union>y \<in> set t. fv_eq y - sdom \<sigma>) \<union> svran \<sigma>" using fv_sapply_eq_sdom_svran by (metis (no_types, lifting) UN_iff UnE UnI1 UnI2)
+  then show ?thesis by auto 
+qed
+
+lemma fv_sapply_var: "\<lbrakk> b \<noteq> Var x \<rbrakk> \<Longrightarrow> fv_eqs (sapply_eqs (Var (x := b)) xs) \<subseteq> fv b \<union> fv_eqs xs"
+proof (rule subsetI)
+  fix y
+  assume "b \<noteq> Var x"
+  then have "svran (Var (x := b)) = fv b" by simp
+  then show "y \<in> fv_eqs (sapply_eqs (Var(x := b)) xs) \<Longrightarrow> y \<in> fv b \<union> fv_eqs xs" using fv_sapply_eqs_sdom_svran by (metis Diff_iff UnE UnI1 UnI2)
+qed
 
 lemma sapply_scomp_distrib_eq: "sapply_eq (\<sigma> \<circ>s \<tau>) (a,b) = (\<sigma> \<cdot> (\<tau> \<cdot> a), \<sigma> \<cdot> (\<tau> \<cdot> b))"
   by (simp)
@@ -715,8 +745,6 @@ proof -
   then show ?thesis by (rule exI[where ?x = x])
 qed
 
-lemma fv_sapply_var: "fv_eqs (sapply_eqs (Var (x := b)) xs) \<subseteq> fv b \<union> fv_eqs xs"
-  sorry
 
 lemma three_one:   
   fixes \<sigma> :: "('f, 'v) subst" 
@@ -740,7 +768,7 @@ next
       have "fv_eqs ((Var x, b) # xs) = fv_eqs xs \<union> {x}" using \<open>b = Var x\<close> by simp
       then have f3: "fv_eqs (sapply_eqs \<sigma> ((Var x, b) # xs)) = fv (\<sigma> x) \<union> fv_eqs (sapply_eqs \<sigma> xs)" using \<open>b = Var x\<close> by simp
       have "(fv (Var x) - sdom \<sigma>) \<subseteq> {x}" by auto
-      moreover have "fv (\<sigma> x) \<subseteq> fv (Var x) - sdom \<sigma> \<union> svran \<sigma>" using  fv_sapply_sdom_svran 
+      moreover have "fv (\<sigma> x) \<subseteq> fv (Var x) - sdom \<sigma> \<union> svran \<sigma>" using  fv_sapply_sdom_svran
         by (metis UnCI calculation fv.simps(1) insert_Diff_if insert_not_empty sdom_intro subsetI subset_singletonD svran_intro)
       ultimately have "fv (\<sigma> x) \<subseteq> {x} \<union> fv_eqs xs" using f2 by auto
       then have "fv_eqs (sapply_eqs \<sigma> ((Var x, b) # xs)) \<subseteq> {x} \<union> fv_eqs xs \<union> fv_eqs xs" using f3 f1 Var by auto
@@ -755,18 +783,25 @@ next
         then show ?thesis by blast
       next 
         case False
-        have "fv_eqs ((Var x, b) # xs) = {x} \<union> fv_eqs xs \<union> fv b" by auto
+        have 4: "fv_eqs ((Var x, b) # xs) = {x} \<union> fv_eqs xs \<union> fv b" by auto
         have 1: "scomp_opt (unify (sapply_eqs (Var(x := b)) xs)) (Var (x := b)) = Some \<sigma>" using Var \<open>b \<noteq> Var x\<close> \<open>x \<notin> fv b\<close> by auto
         then obtain \<sigma>\<^sub>2 where 2: "unify (sapply_eqs (Var(x := b)) xs) = Some \<sigma>\<^sub>2" using scomp_some by blast
         then have IH1: "fv_eqs (sapply_eqs \<sigma>\<^sub>2 (sapply_eqs (Var(x := b)) xs)) \<subseteq> fv_eqs (sapply_eqs (Var(x := b)) xs)"
             and IH2: "sdom \<sigma>\<^sub>2 \<subseteq> fv_eqs (sapply_eqs (Var(x := b)) xs)"
             and IH3: "svran \<sigma>\<^sub>2 \<subseteq> fv_eqs (sapply_eqs (Var(x := b)) xs)" using Var \<open>b \<noteq> Var x\<close> \<open>x \<notin> fv b\<close> by auto
+        then have a1: "fv_eqs (sapply_eqs \<sigma>\<^sub>2 (sapply_eqs (Var(x := b)) xs)) \<subseteq> fv b \<union> fv_eqs xs"
+              and a2: "sdom \<sigma>\<^sub>2 \<subseteq> fv b \<union> fv_eqs xs" 
+              and a3: "svran \<sigma>\<^sub>2 \<subseteq> fv b \<union> fv_eqs xs" using fv_sapply_var False by (metis (mono_tags, lifting) Un_subset_iff fv.simps(1) singletonI sup.absorb_iff2)+
         let ?\<sigma>' = "\<sigma>\<^sub>2 \<circ>s (Var (x := b))"
-        have "\<sigma> = ?\<sigma>'" using 1 2 by simp
-        then have "fv_eqs (sapply_eqs \<sigma> ((Var x, b) # xs)) = fv_eqs (sapply_eqs ?\<sigma>' ((Var x, b) # xs))" by simp
+        have 3: "\<sigma> = ?\<sigma>'" using 1 2 by simp
+        have f1: "sdom \<sigma> \<subseteq> sdom \<sigma>\<^sub>2 \<union> {x}" using \<open>\<sigma> = \<sigma>\<^sub>2 \<circ>s Var(x := b)\<close> by fastforce
+        have f2: "svran \<sigma> \<subseteq> svran \<sigma>\<^sub>2 \<union> fv b" by (metis False \<open>\<sigma> = \<sigma>\<^sub>2 \<circ>s Var(x := b)\<close> fv.simps(1) singletonI svran_scomp svran_single_non_trivial)
+        have "fv_eqs (sapply_eqs \<sigma> ((Var x, b) # xs)) = fv_eqs (sapply_eqs ?\<sigma>' ((Var x, b) # xs))" using 3 by simp
         also have "... = fv (\<sigma>\<^sub>2 \<cdot> b) \<union> fv_eqs (sapply_eqs \<sigma>\<^sub>2 (sapply_eqs (Var (x := b)) xs))" by (auto simp add: False sapply_notin_fv)
-        have "unify (sapply_eqs (Var(x := b)) xs) = Some \<sigma>" using Var by (simp)
-        then show ?thesis sorry
+        moreover have "fv (\<sigma>\<^sub>2 \<cdot> b) \<subseteq> fv b - sdom \<sigma>\<^sub>2 \<union> svran \<sigma>\<^sub>2" using fv_sapply_sdom_svran by fastforce
+        ultimately have "fv_eqs (sapply_eqs \<sigma> ((Var x, b) # xs)) \<subseteq> fv_eqs ((Var x, b) # xs)" using 4 a1 a3 fv_sapply_sdom_svran by auto
+        moreover have "sdom \<sigma> \<subseteq> fv_eqs ((Var x, b) # xs)" " svran \<sigma> \<subseteq> fv_eqs ((Var x, b) # xs)" using a2 a3 f1 f2 by auto
+        ultimately show ?thesis by blast
       qed
     qed
 next 
@@ -796,7 +831,25 @@ lemma 3:
     and sdom_fv: "sdom \<sigma> \<subseteq> fv_eqs l"
     and svran_fv: "svran \<sigma> \<subseteq> fv_eqs l"
     and sdom_svran_disj: "sdom \<sigma> \<inter> svran \<sigma> = {}"
-  sorry
+proof -
+  show "fv_eqs (sapply_eqs \<sigma> l) \<subseteq> fv_eqs l" "sdom \<sigma> \<subseteq> fv_eqs l" "svran \<sigma> \<subseteq> fv_eqs l" using three_one[OF assms] by auto
+next
+  show "sdom \<sigma> \<inter> svran \<sigma> = {}"
+  using assms proof (induction l rule: unify.induct)
+    case 1
+    then have "\<sigma> = Var" using assms by simp
+    then show "sdom \<sigma> \<inter> svran \<sigma> = {}" by simp
+  next
+    case (2 x b xs)
+    then show ?case sorry
+  next
+    case (3 v va x xs)
+    then show ?case sorry
+  next
+    case (4 f l1 g l2 xs)
+    then show ?case sorry
+  qed
+
 
 
 (*********************************** definitions ***************************)
