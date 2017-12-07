@@ -823,6 +823,9 @@ next
 qed
 
 
+lemma unify_notin: "\<lbrakk> unify ((Var x, b) # xs) = Some \<sigma>;  b \<noteq> Var x \<rbrakk> \<Longrightarrow> x \<notin> fv b"
+  by auto
+
 lemma 3:
   fixes \<sigma> :: "('f, 'v) subst" 
     and l :: "('f, 'v) equations"
@@ -835,20 +838,66 @@ proof -
   show "fv_eqs (sapply_eqs \<sigma> l) \<subseteq> fv_eqs l" "sdom \<sigma> \<subseteq> fv_eqs l" "svran \<sigma> \<subseteq> fv_eqs l" using three_one[OF assms] by auto
 next
   show "sdom \<sigma> \<inter> svran \<sigma> = {}"
-  using assms proof (induction l rule: unify.induct)
+  using assms proof (induction l arbitrary: \<sigma> rule: unify.induct)
     case 1
     then have "\<sigma> = Var" using assms by simp
     then show "sdom \<sigma> \<inter> svran \<sigma> = {}" by simp
   next
-    case (2 x b xs)
-    then show ?case sorry
+    case (2 x b xs)print_cases
+    then show ?case
+    proof (cases "b = Var x")
+      case True
+      then have "unify xs = Some \<sigma>" using 2 by simp
+      then show ?thesis using 2 \<open>b = Var x\<close> by simp
+    next
+      case False
+      then have "x \<notin> fv b" using 2 \<open>b \<noteq> Var x\<close> unify_notin by auto
+      obtain \<sigma>\<^sub>2 where 3: "unify (sapply_eqs (Var(x := b)) xs) = Some \<sigma>\<^sub>2" using "2.prems" scomp_some False \<open>x \<notin> fv b\<close> by fastforce
+      then have 4: "\<sigma> = \<sigma>\<^sub>2 \<circ>s (Var (x := b))" using 2 False \<open>x \<notin> fv b\<close> by (simp add: \<open>\<And>\<sigma>. \<lbrakk>b = Var x; unify xs = Some \<sigma>\<rbrakk> \<Longrightarrow> sdom \<sigma> \<inter> svran \<sigma> = {}\<close>)
+      then have "sdom \<sigma>\<^sub>2 \<inter> svran \<sigma>\<^sub>2 = {}" using "2.IH" False \<open>x \<notin> fv b\<close> 3 by simp
+      have "svran \<sigma>\<^sub>2 \<subseteq> fv_eqs (sapply_eqs (Var (x := b)) ((Var x, b) # xs))" using three_one[of "sapply_eqs (Var(x := b)) xs" "\<sigma>\<^sub>2"] 3 by auto
+      moreover have "x \<notin> fv_eqs (sapply_eqs (Var (x := b)) ((Var x, b) # xs))" by (metis Diff_iff False UnE \<open>x \<notin> fv b\<close> fv_sapply_eqs_sdom_svran sdom_single_non_trivial singletonI svran_single_non_trivial)
+      ultimately have "x \<notin> svran \<sigma>\<^sub>2" by blast
+      show ?thesis
+      proof (rule Int_emptyI)
+        fix y
+        assume 6: "y \<in> sdom \<sigma>" "y \<in> svran \<sigma>"
+        have "sdom \<sigma> \<subseteq> sdom \<sigma>\<^sub>2 \<union> sdom (Var (x := b))" using 4 by (auto simp add: sdom_def)
+        then have "y \<in> sdom \<sigma>\<^sub>2 \<union> {x}" using 6 \<open>b \<noteq> Var x\<close> sdom_single_non_trivial by auto
+        have "svran \<sigma> \<subseteq> svran \<sigma>\<^sub>2 \<union> svran (Var (x := b))" using 4 by (simp add: svran_scomp)
+        then have "y \<in> svran \<sigma>\<^sub>2 \<union> fv b" using 6 \<open>b \<noteq> Var x\<close> svran_single_non_trivial by auto
+        then have "y \<noteq> x" using \<open>x \<notin> svran \<sigma>\<^sub>2\<close> \<open>x \<notin> fv b\<close> by blast
+        then have "y \<in> sdom \<sigma>\<^sub>2" using \<open>y \<in> sdom \<sigma>\<^sub>2 \<union> {x}\<close> by blast
+        obtain z where 7: "z \<in> sdom \<sigma> \<and> y \<in> fv(\<sigma> z)" using 6 by auto 
+        then show "False" 
+        proof (cases "z = x")
+          case True
+          then have "\<sigma> z = \<sigma>\<^sub>2 \<cdot> t" using 4 \<open>sdom \<sigma>\<^sub>2 \<inter> svran \<sigma>\<^sub>2 = {}\<close> \<open>y \<in> sdom \<sigma>\<^sub>2\<close> \<open>z \<in> sdom \<sigma> \<and> y \<in> fv (\<sigma> z)\<close> fv_sapply_sdom_svran by fastforce 
+          then have "y \<in> fv(\<sigma>\<^sub>2 \<cdot> t)" using 7 by auto
+          then have "y \<in> fv t - sdom \<sigma>\<^sub>2 \<union> svran \<sigma>\<^sub>2" using fv_sapply_sdom_svran by fastforce
+          then have "y \<in> svran \<sigma>\<^sub>2" using \<open>y \<in> sdom \<sigma>\<^sub>2\<close> by blast
+          then show ?thesis using \<open>y \<in> sdom \<sigma>\<^sub>2\<close> \<open>sdom \<sigma>\<^sub>2 \<inter> svran \<sigma>\<^sub>2 = {}\<close> by blast
+        next
+          case False
+          then have "\<sigma> z = \<sigma>\<^sub>2 z" using 4 by simp
+          then have "z \<in> sdom \<sigma>\<^sub>2" using 7 by fastforce
+          then have "y \<in> svran \<sigma>\<^sub>2" using 7  \<open>\<sigma> z = \<sigma>\<^sub>2 z\<close> by auto
+          then show ?thesis using \<open>y \<in> sdom \<sigma>\<^sub>2\<close> \<open>sdom \<sigma>\<^sub>2 \<inter> svran \<sigma>\<^sub>2 = {}\<close> by blast
+        qed
+      qed
+    qed
   next
-    case (3 v va x xs)
-    then show ?case sorry
+    case (3 v va x xs) print_cases
+    then have "unify ((Var x, Fun v va) # xs) = Some \<sigma>" by simp
+    then show ?case using "3.IH" by simp 
   next
-    case (4 f l1 g l2 xs)
-    then show ?case sorry
+    case (4 f l1 g l2 xs) print_cases
+    then have "unifiess \<sigma> ((Fun f l1, Fun g l2) # xs)" by (simp add: unify_return)
+    then have 5: "g = f" "length l1 = length l2" using ex_unifier_fun by fastforce+
+    then have "unify (xs @ zip l1 l2) = Some \<sigma>" using "4.prems" by simp 
+    then show ?case using "4.IH" 5 assms by auto
   qed
+qed
 
 
 
