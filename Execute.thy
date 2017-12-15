@@ -3,106 +3,65 @@ chapter {* camr project *}
 theory Execute imports Main Unification Term Deduction begin
 
 
-fun through_m:: "msg list \<Rightarrow> msg list \<Rightarrow> msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
-"through_m head [] a t acc = acc" |
-"through_m head (u#tail) a t acc = through_m (head@[u]) tail a t (
+fun through_m :: "msg list \<Rightarrow> msg list \<Rightarrow> msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list" where
+"through_m head [] a t = []" |
+"through_m head (u#tail) a t = (
   case u of
     Concat u1 u2 \<Rightarrow>
-      (Variable, [(((u1#u2#head@tail) | (u#a) } t))])#acc
+      [(Variable, [(((u1#u2#head@tail) | (u#a) } t))])]
     | Sym_encrypt m k \<Rightarrow>
-      (Variable, [(((m#head@tail) | (u#a) } t)), (((head@tail) | (u#a) } k))])#acc
+      [(Variable, [(((m#head@tail) | (u#a) } t)), (((head@tail) | (u#a) } k))])]
     | Pub_encrypt m (Variable agent) \<Rightarrow> 
         let s = Variable(agent:=(Const ''intruder'')) in
-        (s, [sapplyc s ((head@u#tail)|a}t)])#acc
-    | Pub_encrypt m (Const x) \<Rightarrow> (  (* changed from x to (Const x) *)
+        [(s, [sapplyc s ((head@u#tail)|a}t)])]
+    | Pub_encrypt m (Const x) \<Rightarrow> (  
       if x = ''intruder'' then  
-        (Variable, [(((m#head@tail) | (u#a) } t))])#acc
+        [(Variable, [(((m#head@tail) | (u#a) } t))])]
       else
-        acc
+        []
       )
-    | _ \<Rightarrow> acc
-)"
+    | _ \<Rightarrow> []
+) @ through_m (head@[u]) tail a t"
 
-fun through_m2:: "msg list \<Rightarrow> msg list \<Rightarrow> msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
-"through_m2 head [] a t acc = acc" |
-"through_m2 head ((Concat u1 u2)#tail) a t acc = through_m2 (head@[(Concat u1 u2)]) tail a t (Variable, [(((u1#u2#head@tail) | (u#a) } t))])#acc" |
-"through_m2 head ((Sym_encrypt m k)#tail) a t acc = through_m2 (head@[(Sym_encrypt m k)]) tail a t (Variable, [(((m#head@tail) | (u#a) } t)), (((head@tail) | (u#a) } k))])#acc" |
-    | Pub_encrypt m (Variable agent) \<Rightarrow> 
-        let s = Variable(agent:=(Const ''intruder'')) in
-        (s, [sapplyc s ((head@u#tail)|a}t)])#acc
-    | Pub_encrypt m (Const x) \<Rightarrow> (  (* changed from x to (Const x) *)
-      if x = ''intruder'' then  
-        (Variable, [(((m#head@tail) | (u#a) } t))])#acc
-      else
-        acc
-      )
-    | _ \<Rightarrow> acc
-)"
 
-print_theorems
-
-(*
-
-| rer1_proj: "x=Concat u v \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable] [ (u#v#head@tail) | (x#m) } t ]"
-| rer1_sdec: "x=Sym_encrypt u k \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
- [  ((u#head@tail) | (x#m) } t) ,
-    ((head@tail) | (x#m) } k)     ]"
-| rer1_adec: "x=Pub_encrypt u (Const ''intruder'') \<Longrightarrow> (head@x#tail) | m } t \<leadsto>1[Variable]
- [ ((u#head@tail) | (x#m) } t) ]"
-| rer1_ksub: "Pub_encrypt u (Variable agent) \<in> set a \<Longrightarrow>
-s=(Variable (agent:=Const ''intruder'')) \<Longrightarrow>
-a|m}t  \<leadsto>1[s] [ sapplyc s (a|m}t) ]"
-
-Concat u1 u2 \<Rightarrow>
-            (Variable,
-             [(u1 # u2 # head @ tail)|(u # a)} t ]) #
-            acc
-*)
 lemma through_m_sound: 
-  assumes "\<forall> (s, cs)  \<in> set acc. c \<leadsto>1[s] cs" 
-    "(s', cs') \<in> set (through_m head tail a t acc)"
-  shows "c \<leadsto>1[s'] cs'"
+  assumes "(s', cs') \<in> set (through_m head tail a t)"
+  shows "((head@tail) | a } t) \<leadsto>1[s'] cs'"
   using assms
-proof(induction tail)
-  case Nil
-  from this assms show ?case by(auto)
+proof(induction head tail a t rule: through_m.induct)
+  case (1 head a t)
+  then show ?case by auto
 next
-  case (Cons u tail)
-  from this and assms show ?thesis
-  proof (cases "(s', cs') \<in> set (through_m head tail a t acc)")
+  case (2 head u tail a t)
+  let ?snd = "through_m (head @ [u]) tail a t"
+  let ?fst = "through_m head (u # tail) a t"
+  let ?prefix = "case u of
+    Concat u1 u2 \<Rightarrow>
+      [(Variable, [(((u1#u2#head@tail) | (u#a) } t))])]
+    | Sym_encrypt m k \<Rightarrow>
+      [(Variable, [(((m#head@tail) | (u#a) } t)), (((head@tail) | (u#a) } k))])]
+    | Pub_encrypt m (Variable agent) \<Rightarrow> 
+        let s = Variable(agent:=(Const ''intruder'')) in
+        [(s, [sapplyc s ((head@u#tail)|a}t)])]
+    | Pub_encrypt m (Const x) \<Rightarrow> (  
+      if x = ''intruder'' then  
+        [(Variable, [(((m#head@tail) | (u#a) } t))])]
+      else
+        []
+      )
+    | _ \<Rightarrow> []"
+  have decomp:"set ?fst = set ?prefix \<union> set ?snd" by auto
+  then show ?case 
+  proof (cases "(s', cs') \<in> set ?snd")
     case True
-    then show ?thesis using Cons by auto
+    then show ?thesis using 2 by auto
   next
     case False
-    then have "[(s', cs')] = through_m head [u] a t acc" using Cons by auto 
-    then show ?thesis 
-    proof(cases u)
-      case (Hash x1)
-      from assms Cons Hash show ?thesis sorry
-          (*apply(auto intro!:rer1.intros)*)
-    next
-      case (Concat u1 u2)
-      then have "(s', cs') = (Variable, [(u1 # u2 # head @ tail)|(u # a)} t ])" using Concat False Cons by (auto)
-      then show ?thesis using Cons Concat by (auto intro!: rer1.intros split: if_split_asm if_splits)
-      using assms Concat Cons by (auto intro!: rer1.intros simp add: through_m.elims)
-  next
-    case (Sym_encrypt x31 x32)
-    then show ?thesis sorry
-  next
-    case (Pub_encrypt x41 x42)
-    then show ?thesis sorry
-  next
-    case (Sign x51 x52)
-    then show ?thesis sorry
-  next
-    case (Const x6)
-    then show ?thesis sorry
-  next
-    case (Variable x7)
-    then show ?thesis sorry
+    then have "(s', cs') \<in> set ?prefix" using assms decomp 2 by blast
+    then show ?thesis by(cases u)(auto intro!: rer1.intros split: msg.split_asm simp add: Let_def simp del: fun_upd_apply)
   qed
-qed (auto simp add:Cons intro!:rer1.intros split:if_split_asm)
 qed
+
 
 fun through_all :: "msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
   "through_all [] t acc = acc" |
