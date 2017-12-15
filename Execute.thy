@@ -128,10 +128,6 @@ term "fold"
 fun rer_succ:: "system \<Rightarrow> (subst_msg \<times> system) list" where
 "rer_succ cs = rer_succ_aux [] cs []"
 
-lemma simple_code [code]: "simplec (m|a}t) \<longleftrightarrow> (fvl m = {} \<and> fvl a = {})" 
-  apply(simp add:simplec.simps)
-  done
-
 fun next_step:: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
 "next_step l = (concat (map 
 (%(s, cs).

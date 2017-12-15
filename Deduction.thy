@@ -211,8 +211,8 @@ rer_star_id: "cs \<leadsto>*[Variable] cs"
 | rer_star_step: "cs \<leadsto>[s] cs'' \<Longrightarrow> cs'' \<leadsto>*[t] cs' \<Longrightarrow> cs \<leadsto>*[scomp_msg t s] cs'"
 
 (* (d) *)
-inductive simplec:: "constraint \<Rightarrow> bool" where
-"fvl a = {} \<Longrightarrow> fvl m = {} \<Longrightarrow> simplec (a|m}t)"
+definition simplec:: "constraint \<Rightarrow> bool" where
+"simplec c = (case c of (a|m}Variable x) \<Rightarrow> True | _ \<Rightarrow> False)"
 
 definition simples:: "system \<Rightarrow> bool" where
 "simples cs = (\<forall> c \<in> set cs. simplec c)"
