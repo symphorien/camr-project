@@ -62,15 +62,21 @@ next
   qed
 qed
 
+fun through_all :: "msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list" where
+  "through_all _ (Variable _) = []" |
+  "through_all l t  = 
+    concat (map (%u. (case unify_msg [(t, u)] of
+      None \<Rightarrow> []
+    | Some s \<Rightarrow> [(s, [])]
+    )) l)"
 
-fun through_all :: "msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
-  "through_all [] t acc = acc" |
-  "through_all _ (Variable _) acc = acc" |
-  "through_all (u#terms) t acc = 
-    through_all terms t (case unify_msg [(t, u)] of
-      None \<Rightarrow> acc
-    | Some s \<Rightarrow> (s, [])#acc (* CHANGED FROM: Some s => (Variable, [])#acc *)
-    )"
+lemma through_all_sound:
+  assumes "(s, cs) \<in> set (through_all (m@a) t)"
+          "c = m|a}t"
+        shows "c \<leadsto>1[s] cs"
+  using assms
+proof(cases t)
+qed(auto intro:rer1.intros)
 
 
 fun through_t :: "constraint \<Rightarrow> (subst_msg \<times> system) option" where
@@ -92,12 +98,36 @@ qed
 
 fun rer1_succ:: "constraint \<Rightarrow> (subst_msg \<times> system) list" where
   "rer1_succ (m|a}t) = 
-through_all (m@a) t 
-(through_m [] m a t
-(case through_t (m|a}t) of None \<Rightarrow> [] | Some x \<Rightarrow> [x]))"
+(through_all (m@a) t) @ (
+(through_m [] m a t) @ ( 
+(case through_t (m|a}t) of None \<Rightarrow> [] | Some x \<Rightarrow> [x])))"
 
 lemma rer1_succ_sound: "(s, cs) \<in> set (rer1_succ c) \<Longrightarrow> c \<leadsto>1[s] cs"
-proof(cases c)
+proof (cases c)
+  case (Constraint m a t)
+  assume in_set: "(s, cs) \<in> set (rer1_succ c)" 
+  have in_union: "(set (rer1_succ (m|a}t))) = (set (through_all (m@a) t)) \<union> (set (through_m [] m a t)) \<union> (set (case through_t (m|a}t) of None \<Rightarrow> [] | Some x \<Rightarrow> [x]))" 
+    (is "_ = ?Setall \<union> ?Setm \<union> ?Sett") by auto
+  then show ?thesis 
+  proof (cases "(s, cs) \<in> ?Setall")
+    case True
+    then show ?thesis using Constraint by (rule through_all_sound)
+  next
+    case ex: False
+    then show ?thesis
+    proof(cases "(s, cs) \<in> ?Setm")
+      case True
+      thm through_m_sound through_m_sound[of s cs "[]" m a t]
+      then have "([] @ m)|a} t \<leadsto>1[s] cs" by (rule through_m_sound)
+      then show ?thesis using Constraint by simp
+    next
+      case False
+      then have "(s, cs) \<in> ?Sett" using ex in_union in_set Constraint by simp
+      then show ?thesis using Constraint by (auto simp add: through_t_sound)
+    qed
+  qed
+qed
+  
   case (Constraint a m t)
   then show ?thesis sorry
   proof(cases t)
