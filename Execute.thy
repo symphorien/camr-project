@@ -103,15 +103,21 @@ next
   qed
 qed (auto simp add:Cons intro!:rer1.intros split:if_split_asm)
 qed
+fun through_all :: "msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list" where
+  "through_all _ (Variable _) = []" |
+  "through_all l t  = 
+    concat (map (%u. (case unify_msg [(t, u)] of
+      None \<Rightarrow> []
+    | Some s \<Rightarrow> [(s, [])]
+    )) l)"
 
-fun through_all :: "msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
-  "through_all [] t acc = acc" |
-  "through_all _ (Variable _) acc = acc" |
-  "through_all (u#terms) t acc = 
-    through_all terms t (case unify_msg [(t, u)] of
-      None \<Rightarrow> acc
-    | Some s \<Rightarrow> (s, [])#acc (* CHANGED FROM: Some s => (Variable, [])#acc *)
-    )"
+lemma through_all_sound:
+  assumes "(s, cs) \<in> set (through_all (m@a) t)"
+          "c = a|m}t"
+        shows "c \<leadsto>1[s] cs"
+  using assms
+proof(cases t)
+qed(auto intro:rer1.intros)
 
 
 fun through_t :: "constraint \<Rightarrow> (subst_msg \<times> system) option" where
@@ -133,9 +139,9 @@ qed
 
 fun rer1_succ:: "constraint \<Rightarrow> (subst_msg \<times> system) list" where
   "rer1_succ (m|a}t) = 
-through_all (m@a) t 
+(through_all (m@a) t) @ (
 (through_m [] m a t
-(case through_t (m|a}t) of None \<Rightarrow> [] | Some x \<Rightarrow> [x]))"
+(case through_t (m|a}t) of None \<Rightarrow> [] | Some x \<Rightarrow> [x])))"
 
 lemma rer1_succ_sound: "(s, cs) \<in> set (rer1_succ c) \<Longrightarrow> c \<leadsto>1[s] cs"
 proof(cases c)
