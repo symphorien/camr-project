@@ -191,21 +191,85 @@ next
   then show ?case by (simp add:mdef)
 qed auto
 
-fun rer_succ_aux:: "system \<Rightarrow> system \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
-  "rer_succ_aux head [] acc = acc" |
-  "rer_succ_aux head (c#tail) acc = 
-rer_succ_aux (head@[c]) tail (fold 
-  (%(s, cs) acc2. 
+fun rer_succ_aux:: "system \<Rightarrow> system \<Rightarrow> (subst_msg \<times> system) list" where
+  "rer_succ_aux head [] = []" |
+  "rer_succ_aux head (c#tail) = 
+rer_succ_aux (head@[c]) tail @ (map
+  (%(s, cs). 
      (s,
       cs@(sapplys s (head@tail))
-     )#acc2
+     )
   )
   (rer1_succ c)
-  acc
 )"
 
+lemma rer_succ_aux_sound: "(s, cs') \<in> set (rer_succ_aux head tail) \<Longrightarrow> (head@tail) \<leadsto>[s] cs'"
+proof(induction head tail arbitrary:s cs' rule:rer_succ_aux.induct)
+  case (1 head)
+  then show ?case by simp
+next
+  case (2 head c tail)
+  then show ?case
+  proof(cases "(s, cs') \<in> set (rer_succ_aux (head@[c]) tail)")
+    case True
+    then have "((head @ [c]) @ tail)\<leadsto>[s] cs'" by(rule 2)
+    then show ?thesis by(simp)
+next
+  case False
+  from this and "2"(2) have "(s, cs') \<in> set (map
+  (%(s, cs). 
+     (s,
+      cs@(sapplys s (head@tail))
+     )
+  )
+  (rer1_succ c)
+)" by simp
+  then obtain cs where csdef:"cs' = cs@(sapplys s (head@tail))" and in_rer1_succ:"(s, cs) \<in> set (rer1_succ c)" by auto
+  moreover from in_rer1_succ have "c \<leadsto>1[s] cs" by(rule rer1_succ_sound)
+  ultimately show ?thesis by(auto intro!:rer.intros)
+qed
+qed
+
+(* ok, this is exactly the same proof that for through_m_ribosom; I could have done a proper
+general theorem *)
+lemma rer_succ_aux_ribosom: "set (rer_succ_aux head tail) \<subseteq> set (rer_succ_aux [] (head@tail))"
+proof(induction "rev head" arbitrary:head tail)
+case Nil
+  then show ?case by simp
+next
+  case (Cons u rhead head)
+  then have "head = rev (u#rhead)" by simp
+  then have headdef:"head = (rev rhead) @ [u]" by simp
+  have "rhead = rev (rev rhead)" by simp
+  then have "set (rer_succ_aux (rev rhead) (u # tail))
+\<subseteq> set (rer_succ_aux [] (rev rhead @ u # tail))" by(rule Cons(1))
+  moreover have "rev rhead @ u # tail = head @ tail" by(simp add: headdef)
+  ultimately have "set (rer_succ_aux (rev rhead) (u # tail)) \<subseteq> set (rer_succ_aux [] (head @ tail))" by simp
+  moreover have "set (rer_succ_aux ((rev rhead) @ [u]) tail) \<subseteq> set (rer_succ_aux (rev rhead) (u # tail))" by auto
+  then have "set (rer_succ_aux head tail) \<subseteq> set (rer_succ_aux (rev rhead) (u # tail))" by(simp add:headdef)
+  ultimately show ?case by blast
+qed
+
 fun rer_succ:: "system \<Rightarrow> (subst_msg \<times> system) list" where
-"rer_succ cs = rer_succ_aux [] cs []"
+"rer_succ cs = rer_succ_aux [] cs"
+
+lemma rer_succ_complete: "cs \<leadsto>[s] cs' \<Longrightarrow> (s, cs') \<in> set (rer_succ cs)"
+proof(induction cs s cs' rule:rer.induct)
+  case (1 c s cs head tail)
+  then have "(s, cs)\<in> set (rer1_succ c)" by(rule rer1_succ_complete)
+  then have "(s, cs @ sapplys s (head @ tail))\<in> set (rer_succ_aux head (c#tail))" (is "?elt \<in> ?set") by auto
+  moreover have "?set \<subseteq> set (rer_succ_aux [] (head@c#tail))" by(rule rer_succ_aux_ribosom)
+  then have "?set \<subseteq> set (rer_succ (head@c#tail))" by simp
+  ultimately show ?case by blast
+qed
+
+lemma rer_succ_sound: "(s, cs') \<in> set (rer_succ cs) \<Longrightarrow> cs \<leadsto>[s] cs'"
+proof -
+  assume "(s, cs') \<in> set (rer_succ cs)"
+  then have "(s, cs') \<in> set (rer_succ_aux [] cs)" by simp
+  then have "([]@cs) \<leadsto>[s] cs'" by(rule rer_succ_aux_sound)
+  then show "cs \<leadsto>[s] cs'" by simp
+qed
 
 fun next_step:: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
 "next_step l = (concat (map 
