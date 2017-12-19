@@ -23,6 +23,23 @@ fun through_m :: "msg list \<Rightarrow> msg list \<Rightarrow> msg list \<Right
     | _ \<Rightarrow> []
 ) @ through_m (head@[u]) tail a t"
 
+lemma through_m_ribosom: "set (through_m head tail a t) \<subseteq> set (through_m [] (head@tail) a t)"
+proof(induction "rev head" arbitrary:head tail)
+case Nil
+  then show ?case by simp
+next
+  case (Cons u rhead head)
+  then have "head = rev (u#rhead)" by simp
+  then have headdef:"head = (rev rhead) @ [u]" by simp
+  have "rhead = rev (rev rhead)" by simp
+  then have "set (through_m (rev rhead) (u # tail) a t)
+\<subseteq> set (through_m [] (rev rhead @ u # tail) a t)" by(rule Cons(1))
+  moreover have "rev rhead @ u # tail = head @ tail" by(simp add: headdef)
+  ultimately have "set (through_m (rev rhead) (u # tail) a t) \<subseteq> set (through_m [] (head @ tail) a t)" by simp
+  moreover have "set (through_m ((rev rhead) @ [u]) tail a t) \<subseteq> set (through_m (rev rhead) (u # tail) a t)" by auto
+  then have "set (through_m head tail a t) \<subseteq> set (through_m (rev rhead) (u # tail) a t)" by(simp add:headdef)
+  ultimately show ?case by blast
+qed
 
 lemma through_m_sound: 
   assumes "(s', cs') \<in> set (through_m head tail a t)"
@@ -127,12 +144,52 @@ proof (cases c)
     qed
   qed
 qed
-  
-  case (Constraint a m t)
-  then show ?thesis sorry
-  proof(cases t)
-  qed
-qed
+
+lemma rer1_succ_complete: "c \<leadsto>1[s] cs \<Longrightarrow> (s, cs) \<in> set (rer1_succ c)"
+proof(induction c s cs rule:rer1.induct)
+  case (rer1_unify t u a m s)
+  then have "(s, []) \<in> set (through_all (m@a) t)"
+    apply(cases t; cases "u\<in>set a")
+                 apply(auto simp add:sym[of "Some s" _] intro:bexI[of _ "u" "set a"])
+         apply(auto simp add:sym[of "Some s" _] intro:bexI[of _ "u" "set m"])
+    done    
+  then show ?case by simp
+next
+  case (rer1_proj x u v head tail a t)
+  then have "(Variable, [(u # v # head @ tail)|(x # a)} t ]) \<in> set (through_m head (x # tail) a t)" (is "?x \<in> ?s")
+    by(auto)
+  moreover have "?s \<subseteq> set (through_m [] (head@x#tail) a t)" by(rule through_m_ribosom)
+  ultimately have "?x \<in> set (through_m [] (head @ x # tail) a t)"
+    by blast
+  then show ?case by simp
+next
+  case (rer1_sdec x u k head tail a t)
+  then have "(Variable,
+     [(u # head @ tail)|(x # a)} t , (head @ tail)|(x # a)} k ]) \<in> set (through_m head (x # tail) a t)" (is "?x \<in> ?s")
+    by(auto)
+  moreover have "?s \<subseteq> set (through_m [] (head@x#tail) a t)" by(rule through_m_ribosom)
+  ultimately have "?x \<in> set (through_m [] (head @ x # tail) a t)"
+    by blast
+  then show ?case by simp
+next
+  case (rer1_adec x u head tail a t)
+   then have "(Variable, [(u # head @ tail)|(x # a)} t ]) \<in> set (through_m head (x # tail) a t)" (is "?x \<in> ?s")
+    by(auto)
+  moreover have "?s \<subseteq> set (through_m [] (head@x#tail) a t)" by(rule through_m_ribosom)
+  ultimately have "?x \<in> set (through_m [] (head @ x # tail) a t)"
+    by blast
+  then show ?case by simp
+next
+  case (rer1_ksub u agent m s a t)
+  let ?x="Pub_encrypt u (Variable agent)"
+  from rer1_ksub(1) and split_list[of "?x" "m"]  obtain head tail where mdef:"m = head @ ?x#tail" by blast
+ then have " (s, [sapplyc s (m|a} t )]) \<in> set (through_m head (?x # tail) a t)" (is "?elt \<in> ?s")
+   by(auto simp add:rer1_ksub Let_def sapplyc_def)
+  moreover have "?s \<subseteq> set (through_m [] (head@?x#tail) a t)" by(rule through_m_ribosom)
+  ultimately have "?elt \<in> set (through_m [] (head @ ?x # tail) a t)"
+    by blast
+  then show ?case by (simp add:mdef)
+qed auto
 
 fun rer_succ_aux:: "system \<Rightarrow> system \<Rightarrow> (subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
   "rer_succ_aux head [] acc = acc" |
@@ -147,7 +204,6 @@ rer_succ_aux (head@[c]) tail (fold
   acc
 )"
 
-term "fold"
 fun rer_succ:: "system \<Rightarrow> (subst_msg \<times> system) list" where
 "rer_succ cs = rer_succ_aux [] cs []"
 
