@@ -277,14 +277,56 @@ fun next_step:: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<tim
   map (%(s', cs'). (scomp_msg s' s, cs')) (rer_succ cs)
 ) l
 ))"
+lemma wf_empty: "wf {}" by(auto simp add: wf_eq_minimal)
+
+definition steps_set:: "(((subst_msg \<times> system) list) \<times> ((subst_msg \<times> system) list)) set"
+  where "steps_set = {((next_step l), l)|l. l\<noteq>[]}"
+
+lemma wf_steps_set:"wf steps_set"
+proof -
+  let ?orig = "{(y, x). reducesto x y}"
+  let ?pairs = "?orig <*lex*> ({}::subst_msg rel)"
+  let ?revpairs = "inv_image ?pairs (%(x, y). (y, x))"
+  let ?sets = "max_ext ?revpairs"
+  have "steps_set \<subseteq> inv_image ?sets set" (is "_ \<subseteq> ?lists")
+  proof(rule subsetI)
+    fix x
+    assume assms:"x \<in> steps_set"
+    then obtain l where xdef:"x = (next_step l, l)" and lnonempty:"l\<noteq>[]" by(auto simp del:next_step.simps simp add:steps_set_def)
+    have "(set (next_step l), set l) \<in> ?sets"
+    proof(rule max_extI)
+      fix y
+      assume "y \<in> set (next_step l)"
+      then obtain s cs s' cs'
+        where ydef:"y = (scomp_msg s' s, cs')"
+          and cs'def:"(s', cs')\<in> set (rer_succ cs)"
+          and csdef: "(s, cs) \<in> set l"
+        by auto
+      show "\<exists>z\<in>set l. (y, z) \<in> ?revpairs"
+      proof(rule bexI[of _ "(s, cs)"])
+        from cs'def have "cs \<leadsto>[s'] cs'" by(rule rer_succ_sound)
+        then have "reducesto cs cs'" by(auto intro:reducesto.intros)
+        then have "(cs', cs) \<in> ?orig" by simp
+        then have "((cs', s'), (cs, s)) \<in> ?pairs" by(auto)
+        then show "(y, (s, cs)) \<in> ?revpairs" by(auto simp add:inv_image_def ydef)
+      qed(simp add:csdef)
+    qed(auto simp add:lnonempty)
+    from this assms xdef show "x\<in> ?lists" by(auto simp del:next_step.simps simp add:steps_set_def)
+  qed
+  moreover from termination_red and wf_empty have "wf ?pairs" by(rule wf_lex_prod)
+  then have "wf ?revpairs" by auto
+  then have "wf ?sets" by(auto intro:max_ext_wf)
+  then have "wf ?lists" by auto
+  ultimately show ?thesis by(auto intro:wf_subset)
+qed
 
 function search_aux :: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) option" where
 "search_aux l = (if l=[] then None else (case find (%(s, cs). simples cs) l of Some x \<Rightarrow> Some x | None \<Rightarrow> search_aux (next_step l)))"
   by pat_completeness auto
 termination
-  (* by (auto simp add:termination_red) *)
-  sorry
-
+  apply(relation "steps_set")
+  using wf_steps_set apply(auto simp add:steps_set_def simp del:next_step.simps)
+  done
 fun search:: "system \<Rightarrow> (subst_msg \<times> system) option" where
 "search cs = search_aux [(Variable, cs)]"
 
