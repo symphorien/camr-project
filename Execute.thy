@@ -3,6 +3,7 @@ chapter {* camr project *}
 theory Execute imports Main Unification Term Deduction begin
 
 
+(* helper function that applies ANALYSIS RULES one step *)
 fun through_m :: "msg list \<Rightarrow> msg list \<Rightarrow> msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list" where
 "through_m head [] a t = []" |
 "through_m head (u#tail) a t = (
@@ -79,6 +80,8 @@ next
   qed
 qed
 
+
+(* helper function that applies UNIFY RULE one step*)
 fun through_all :: "msg list \<Rightarrow> msg \<Rightarrow> (subst_msg \<times> system) list" where
   "through_all _ (Variable _) = []" |
   "through_all l t  = 
@@ -96,6 +99,7 @@ proof(cases t)
 qed(auto intro:rer1.intros)
 
 
+(* helper function that applies COMPOSITION RULES one step *)
 fun through_t :: "constraint \<Rightarrow> (subst_msg \<times> system) option" where
   "through_t (m|a}Concat x y) = Some (Variable, [(m|a}x), (m|a}y)])"
 | "through_t (m|a}Sym_encrypt x y) =  Some (Variable, [(m|a}x), (m|a}y)])"
@@ -113,6 +117,8 @@ proof(cases c)
     done
 qed
 
+
+(* apply all constraint reduction rules to the input constraint *)
 fun rer1_succ:: "constraint \<Rightarrow> (subst_msg \<times> system) list" where
   "rer1_succ (m|a}t) = 
 (through_all (m@a) t) @ (
@@ -191,6 +197,8 @@ next
   then show ?case by (simp add:mdef)
 qed auto
 
+
+(* apply the substitutions collected by applying the constraint reduction rules*)
 fun rer_succ_aux:: "system \<Rightarrow> system \<Rightarrow> (subst_msg \<times> system) list" where
   "rer_succ_aux head [] = []" |
   "rer_succ_aux head (c#tail) = 
@@ -271,6 +279,8 @@ proof -
   then show "cs \<leadsto>[s] cs'" by simp
 qed
 
+
+(* get the set of all constraints reachable from the current set *)
 fun next_step:: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) list" where
 "next_step l = (concat (map 
 (%(s, cs).
@@ -344,6 +354,7 @@ proof -
   ultimately show ?thesis by(auto intro:wf_subset)
 qed
 
+(* search for a simple constraint system which can be reached from the original constraint system *)
 function search_aux :: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<times> system) option" where
 "search_aux l = (if l=[] then None else (case find (%(s, cs). simples cs) l of Some x \<Rightarrow> Some x | None \<Rightarrow> search_aux (next_step l)))"
   by pat_completeness auto
@@ -353,7 +364,7 @@ termination
   done
 
 
-lemma "search_aux l = None \<Longrightarrow> (s, cs)\<in> set l \<Longrightarrow> cs \<leadsto>*[s'] cs' \<Longrightarrow> simples cs' \<Longrightarrow> False"
+lemma search_aux_none: "search_aux l = None \<Longrightarrow> (s, cs)\<in> set l \<Longrightarrow> cs \<leadsto>*[s'] cs' \<Longrightarrow> simples cs' \<Longrightarrow> False"
 proof(induction l arbitrary:s cs s' rule:search_aux.induct)
   case (1 l)
   then show ?case
@@ -444,8 +455,33 @@ proof(induction l rule:search_aux.induct)
   qed
 qed
 
+lemma search_aux_complete: "(\<exists> s cs'. cs \<leadsto>*[s] cs' \<and> simples cs') \<Longrightarrow> (\<exists> s' cs''. search_aux [(Variable, cs)] = Some (s', cs''))"
+proof (rule ccontr)
+  assume "\<exists>s cs'. cs\<leadsto>*[s] cs' \<and> simples cs'"
+  then show "\<nexists>s' cs''. search_aux [(Variable, cs)] = Some (s', cs'') \<Longrightarrow> False"
+  proof -
+    assume asm: "\<nexists>s' cs''. search_aux [(Variable, cs)] = Some (s', cs'')"
+    have "\<exists>x. search_aux [(Variable, cs)] = x" by simp
+    then have "search_aux [(Variable, cs)] = None \<or> (\<exists> x xs. search_aux [(Variable, cs)] = Some (x, xs))" by (simp add: split_option_ex)
+    then have "search_aux [(Variable, cs)] = None" using asm by blast
+    then have "(s1, cs) \<in> set [(Variable, cs)] \<Longrightarrow> cs \<leadsto>*[s] cs' \<Longrightarrow> simples cs' \<Longrightarrow> False" using search_aux_none by blast
+    then show ?thesis by (meson \<open>\<exists>s cs'. cs\<leadsto>*[s] cs' \<and> simples cs'\<close> \<open>search_aux [(Variable, cs)] = None\<close> list.set_intros(1) search_aux_none)
+  qed
+qed
+
+(*
+MISSING PROOFS:
+search_aux_sound
+search_sound
+*)
+
 fun search:: "system \<Rightarrow> (subst_msg \<times> system) option" where
 "search cs = search_aux [(Variable, cs)]"
+
+lemma search_complete: "(\<exists> s cs'. cs \<leadsto>*[s] cs' \<and> simples cs') \<Longrightarrow> (\<exists> s' cs''. search cs = Some (s', cs''))"
+  by (auto simp del: search_aux.simps simp add: search_aux_complete)
+
+(* test examples *)
 
 definition KTP:: "msg \<Rightarrow> msg \<Rightarrow> msg \<Rightarrow> msg \<Rightarrow> system"
   where
@@ -463,6 +499,7 @@ in [
   ]
 )"
 
+
 definition "A0 = Variable ''A0''"
 definition "A1 = Const ''A''"
 definition "B0 = Variable ''B0''"
@@ -472,6 +509,6 @@ value "find (%(s, cs). simples cs) (rer_succ (KTP A0 B0 A1 B1))"
 value "rer_succ (KTP A0 B0 A1 B1)"
 value "(next_step ([(Variable, (KTP A0 B0 A1 B1))]))"
 
-value "map_option (%(s, cs). (cs, map (%v. (v, s v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search (KTP A0 B0 A1 B1))"
+(* value "map_option (%(s, cs). (cs, map (%v. (v, s v)) [''A0'', ''B0'', ''K1'', ''Z0''])) (search (KTP A0 B0 A1 B1))" *)
 
 end 
