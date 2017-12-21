@@ -404,7 +404,46 @@ proof(induction l arbitrary:s cs s' rule:search_aux.induct)
     qed
   qed
 qed
- 
+
+lemma find_invent: "find P l = Some x \<Longrightarrow> x\<in> set l"
+proof(induction l)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a l)
+  then show ?case
+  proof(cases "P a")
+    case True
+    from True and Cons show ?thesis by auto
+  next
+    case False
+    from False and Cons show ?thesis by auto
+  qed
+qed
+
+lemma search_finds_descendent:"search_aux l = Some (s', cs') \<Longrightarrow> (\<exists>S. (\<exists> (s, cs)\<in> set l. cs \<leadsto>*[S] cs'))"
+proof(induction l rule:search_aux.induct)
+  case (1 l)
+  then have "l\<noteq>[]" by auto
+  show ?case
+  proof(cases "find (\<lambda>(s, y). simples y) l")
+    case None
+    from "1" and None and `l \<noteq> []` 
+    obtain S cs s where "(s, cs)\<in>set (next_step l)" "cs\<leadsto>*[S] cs'"
+      by(auto simp del:next_step.simps split:if_split_asm)
+    then obtain s0 cs0 W where "(s0, cs0)\<in> set l" "cs0 \<leadsto>[W] cs"
+      by(auto simp add:set_next_step simp del:next_step.simps)
+    from `cs0 \<leadsto>[W] cs` and  `cs\<leadsto>*[S] cs'` have "cs0 \<leadsto>*[scomp_msg S W] cs'" by(rule rer_star_step)
+    from this and `(s0, cs0)\<in> set l` show ?thesis by(auto simp del:next_step.simps)
+  next
+    case (Some a)
+    from this and "1" and `l\<noteq>[]` have "a = (s', cs')" by simp
+    from this and Some have "(s', cs')\<in> set l" by(auto simp add:find_invent)
+    moreover have "cs' \<leadsto>*[Variable] cs'" by(rule rer_star_id)
+    ultimately show ?thesis by auto
+  qed
+qed
+
 fun search:: "system \<Rightarrow> (subst_msg \<times> system) option" where
 "search cs = search_aux [(Variable, cs)]"
 
