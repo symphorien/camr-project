@@ -277,6 +277,30 @@ fun next_step:: "(subst_msg \<times> system) list \<Rightarrow> (subst_msg \<tim
   map (%(s', cs'). (scomp_msg s' s, cs')) (rer_succ cs)
 ) l
 ))"
+
+
+lemma set_next_step: "set (next_step l) = (\<Union> (s, cs) \<in> set l. {(scomp_msg s' s, cs') |cs' s'. cs\<leadsto>[s'] cs'})" (is "_ = ?UN")
+proof(rule equalityI; rule subsetI)
+  fix x
+  assume xin:"x\<in> set(next_step l)"
+  then obtain s cs s' cs' where xdef:"x= (scomp_msg s' s, cs')" and rel:"(s', cs')\<in>set (rer_succ cs)" and csdef:"(s, cs)\<in>set l"  by auto
+  moreover from rel have "cs \<leadsto>[s'] cs'" by(rule rer_succ_sound)
+  ultimately show "x\<in> ?UN" by auto
+next
+  fix x
+  assume xin:"x\<in>?UN"
+  then obtain s cs s' cs' where
+    xdef:"x= (scomp_msg s' s, cs')" and rel:"cs\<leadsto>[s'] cs'" and csdef:"(s, cs)\<in>set l" 
+    by auto
+  moreover from rel have "(s', cs')\<in>set (rer_succ cs)" by(rule rer_succ_complete)
+  ultimately have "x\<in> set (map (%(s', cs'). (scomp_msg s' s, cs')) (rer_succ cs))" (is "x\<in> set ?L") by auto
+  moreover from csdef have "?L \<in> set (map 
+(%(s, cs).
+  map (%(s', cs'). (scomp_msg s' s, cs')) (rer_succ cs)
+) l)" by auto
+  ultimately show "x\<in> set (next_step l)" by(auto simp only:set_concat next_step.simps)
+qed
+
 lemma wf_empty: "wf {}" by(auto simp add: wf_eq_minimal)
 
 definition steps_set:: "(((subst_msg \<times> system) list) \<times> ((subst_msg \<times> system) list)) set"
@@ -327,6 +351,60 @@ termination
   apply(relation "steps_set")
   using wf_steps_set apply(auto simp add:steps_set_def simp del:next_step.simps)
   done
+
+
+lemma "search_aux l = None \<Longrightarrow> (s, cs)\<in> set l \<Longrightarrow> cs \<leadsto>*[s'] cs' \<Longrightarrow> simples cs' \<Longrightarrow> False"
+proof(induction l arbitrary:s cs s' rule:search_aux.induct)
+  case (1 l)
+  then show ?case
+  proof(cases "l=[]")
+    case True
+    from this and "1" show ?thesis by(simp)
+  next
+    case False
+    from `l\<noteq>[]` and `search_aux l = None` have a:"find (\<lambda>a. case a of (s, a) \<Rightarrow> simples a) l = None"
+      by(cases)(auto simp del:next_step.simps split:if_split_asm option.split)
+    from `l\<noteq>[]` and `search_aux l = None` and this have b:"search_aux (next_step l) = None"
+      by(auto simp del:next_step.simps split:if_split_asm option.split)
+    from a b "1" False have "\<And>s s' cs. (s, cs) \<in> set (next_step l) \<Longrightarrow>  cs\<leadsto>*[s'] cs' \<Longrightarrow> False" 
+      by blast
+    from `cs\<leadsto>*[s'] cs'` and `simples cs'` and `(s, cs) \<in> set l` and `search_aux l = None` and this show ?thesis
+    proof(induction cs s' cs' arbitrary:s l rule:rer_star.induct)
+      case (rer_star_id cs)
+      from `(s, cs) \<in> set l` have "l \<noteq> []" by auto
+      from `simples cs` and `l\<noteq>[]` and `(s, cs)\<in> set l`
+      have "find (\<lambda>(s, y). simples y) l \<noteq> None"
+        by(auto simp add:find_None_iff)
+      from this and `search_aux l = None` show False
+        by(auto simp del:next_step.simps split:if_split_asm option.split_asm)
+    next
+      case (rer_star_step cs t' cs'' t cs')
+      from `cs\<leadsto>[t'] cs''` and `(s, cs)\<in>set l` have c:"(scomp_msg t' s, cs'')\<in> set (next_step l)" (is "(?s, _)\<in>_")
+        by (auto simp add:set_next_step simp del:next_step.simps)
+      have d:"search_aux (next_step l) = None"
+      proof(rule ccontr)
+        assume "search_aux (next_step l) \<noteq> None"
+        then obtain x where "search_aux (next_step l) =Some x" by auto
+        moreover from `(s, cs) \<in> set l` have "l\<noteq>[]" by auto
+        ultimately have "search_aux (l) \<noteq> None"
+          by(auto simp del:next_step.simps split:if_split_asm option.split)
+        from this and `search_aux l = None` show False by blast
+      qed
+      have "\<And>S CS S'. (S, CS) \<in> set (next_step (next_step l)) \<Longrightarrow> CS\<leadsto>*[S'] cs'  \<Longrightarrow> False"
+      proof -
+        fix S CS S'
+        assume "(S, CS) \<in> set (next_step (next_step l))" "CS\<leadsto>*[S'] cs'"
+        from `(?s, cs'')\<in>set (next_step l)` and this and set_next_step[of "next_step l"]
+        obtain k T U where "k \<leadsto>[T] CS" and "(U, k)\<in> set (next_step l)"
+          by(auto simp del:next_step.simps)
+        from this and `CS\<leadsto>*[S'] cs'` have "k \<leadsto>*[scomp_msg S' T] cs'" by(auto intro:rer_star.intros)
+        from `(U, k)\<in>set (next_step l)` and this show False by(rule rer_star_step)
+      qed
+      from `simples cs'` and c and d and this and rer_star_step show False by blast
+    qed
+  qed
+qed
+ 
 fun search:: "system \<Rightarrow> (subst_msg \<times> system) option" where
 "search cs = search_aux [(Variable, cs)]"
 
